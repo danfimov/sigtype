@@ -3,6 +3,7 @@ import zipfile
 from pathlib import Path
 
 import sigtype
+import sigtype.types
 
 # Absolute path to fixtures directory
 FIXTURES = str(Path(__file__).resolve().parent / "fixtures")
@@ -230,3 +231,34 @@ class TestFileType:
         assert kind is not None
         assert kind.mime == "application/vnd.oasis.opendocument.presentation"
         assert kind.extension == "odp"
+
+
+class TestFontMime:
+    """Font MIME types follow RFC 8081, which deprecated the `application/font-*` aliases."""
+
+    def test_woff(self):
+        kind = sigtype.guess(b"wOFF\x00\x01\x00\x00" + b"\x00" * 16)
+        assert kind is not None
+        assert (kind.mime, kind.extension) == ("font/woff", "woff")
+
+    def test_woff2(self):
+        kind = sigtype.guess(b"wOF2\x00\x01\x00\x00" + b"\x00" * 16)
+        assert kind is not None
+        assert (kind.mime, kind.extension) == ("font/woff2", "woff2")
+
+    def test_ttf(self):
+        kind = sigtype.guess(b"\x00\x01\x00\x00\x00" + b"\x00" * 16)
+        assert kind is not None
+        assert (kind.mime, kind.extension) == ("font/ttf", "ttf")
+
+    def test_otf(self):
+        kind = sigtype.guess(b"OTTO\x00" + b"\x00" * 16)
+        assert kind is not None
+        assert (kind.mime, kind.extension) == ("font/otf", "otf")
+
+    def test_mimes_are_unique(self):
+        mimes = [kind.mime for kind in sigtype.types.FONT]
+        assert len(mimes) == len(set(mimes))
+
+    def test_is_font(self):
+        assert sigtype.is_font(b"OTTO\x00" + b"\x00" * 16)

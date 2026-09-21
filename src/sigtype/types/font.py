@@ -17,7 +17,7 @@ _SFNT_MIN_LENGTH: Final = 4
 class Woff(Type):
     """Implements the WOFF font type matcher."""
 
-    MIME: Final[str] = "application/font-woff"
+    MIME: Final[str] = "font/woff"
     EXTENSION: Final[str] = "woff"
 
     def __init__(self) -> None:
@@ -42,7 +42,7 @@ class Woff(Type):
 class Woff2(Type):
     """Implements the WOFF2 font type matcher."""
 
-    MIME: Final[str] = "application/font-woff"
+    MIME: Final[str] = "font/woff2"
     EXTENSION: Final[str] = "woff2"
 
     def __init__(self) -> None:
@@ -67,7 +67,7 @@ class Woff2(Type):
 class Ttf(Type):
     """Implements the TTF font type matcher."""
 
-    MIME: Final[str] = "application/font-sfnt"
+    MIME: Final[str] = "font/ttf"
     EXTENSION: Final[str] = "ttf"
 
     def __init__(self) -> None:
@@ -83,7 +83,7 @@ class Ttf(Type):
 class Otf(Type):
     """Implements the OTF font type matcher."""
 
-    MIME: Final[str] = "application/font-sfnt"
+    MIME: Final[str] = "font/otf"
     EXTENSION: Final[str] = "otf"
 
     def __init__(self) -> None:
