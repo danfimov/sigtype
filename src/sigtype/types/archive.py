@@ -161,11 +161,8 @@ class Pdf(Type):
     @override
     def match(self, buf: bytes | bytearray) -> bool:
         """Check whether the buffer holds the PDF header, allowing junk before it."""
-        # Detect BOM and skip first 3 bytes
-        if buf[:3] == Pdf.BOM:
-            buf = buf[3:]
-
-        if buf[:4] == Pdf.SIGNATURE:
+        # The header at the very start, optionally behind a BOM
+        if buf.startswith(Pdf.SIGNATURE) or (buf.startswith(Pdf.BOM) and buf.startswith(Pdf.SIGNATURE, len(Pdf.BOM))):
             return True
 
         # Some generators prepend garbage (e.g. HTML or a file name) before the header

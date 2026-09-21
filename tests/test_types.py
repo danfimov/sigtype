@@ -5,6 +5,7 @@ from pathlib import Path
 import sigtype
 import sigtype.types
 import sigtype.types.document
+import sigtype.types.text
 from sigtype.types.cfb import read_root_entry_names
 
 from .cfb_builder import build_cfb
@@ -710,3 +711,17 @@ class TestZipEntryMatchers:
         assert not sigtype.types.document.Xlsx().match(docx)
         assert not sigtype.types.document.Ofd().match(docx)
         assert not sigtype.types.document.Docx().match(b"not a zip at all")
+
+
+class TestPdfHeaderPlacement:
+    BODY = b"%PDF-1.4\n" + b"\x00" * 32
+
+    def test_utf8_bom_before_header(self):
+        assert sigtype.guess_mime(b"\xef\xbb\xbf" + self.BODY) == "application/pdf"
+
+    def test_bom_alone_is_not_a_pdf(self):
+        assert sigtype.guess_mime(b"\xef\xbb\xbf" + b"\x00" * 32) is None
+
+    def test_bytearray_input(self):
+        assert sigtype.guess_mime(bytearray(self.BODY)) == "application/pdf"
+        assert sigtype.guess_mime(bytearray(b"junk" + self.BODY)) == "application/pdf"
