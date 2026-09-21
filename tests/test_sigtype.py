@@ -5,12 +5,17 @@ import pytest
 
 import sigtype
 import sigtype.types.audio
+import sigtype.types.base
 import sigtype.utils
 
 from .cfb_builder import build_cfb
 
 # Absolute path to fixtures directory
 FIXTURES = str(Path(__file__).resolve().parent / "fixtures")
+
+# In compiled (mypyc) builds `Type` is a native class that interpreted code cannot subclass
+COMPILED = not sigtype.types.base.__file__.endswith(".py")
+SUBCLASSING_UNSUPPORTED = pytest.mark.skipif(COMPILED, reason="interpreted classes cannot inherit from compiled Type")
 
 
 class TestFileType:
@@ -294,3 +299,34 @@ class TestSourceReader:
         for _ in range(20):
             assert sigtype.guess_extension(str(path)) == "xls"
         assert open_files() == before
+
+
+class TestPathInput:
+    def test_missing_file_raises(self, tmp_path):
+        with pytest.raises(FileNotFoundError):
+            sigtype.guess(str(tmp_path / "missing.bin"))
+
+    def test_pathlib_path_and_str_agree(self):
+        for name in ("sample.jpg", "sample.zip", "sample.doc", "sample.xlsx"):
+            assert sigtype.guess_mime(Path(FIXTURES) / name) == sigtype.guess_mime(FIXTURES + "/" + name)
+
+    @SUBCLASSING_UNSUPPORTED
+    def test_file_is_closed_when_a_matcher_raises(self, tmp_path):
+        class Boom(sigtype.types.Type):
+            needs_read_at = True
+
+            def __init__(self) -> None:
+                super().__init__(mime="application/boom", extension="boom")
+
+            def match_at(self, _buf, _read_at):
+                raise RuntimeError
+
+        path = tmp_path / "x.bin"
+        path.write_bytes(b"data")
+        with pytest.raises(RuntimeError):
+            sigtype.match(str(path), [Boom()])
+        # the file must not stay open: removing it would fail on Windows, and descriptors would leak everywhere
+        if Path("/proc/self/fd").exists():
+            assert not any(
+                str(path) == str(link.resolve()) for link in Path("/proc/self/fd").iterdir() if link.exists()
+            )

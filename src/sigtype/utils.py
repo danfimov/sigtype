@@ -106,8 +106,15 @@ class SourceReader:
     """
 
     def __init__(self) -> None:
-        """Create a reader with an empty memo."""
-        self.memo: dict[str, object] = {}
+        """Create a reader."""
+        self._memo: dict[str, object] | None = None
+
+    @property
+    def memo(self) -> dict[str, object]:
+        """Return the per-input memo, created on first use since most inputs never need one."""
+        if self._memo is None:
+            self._memo = {}
+        return self._memo
 
     def __call__(self, offset: int, size: int) -> bytes | bytearray:
         """Return up to `size` bytes starting at `offset`."""
@@ -151,6 +158,23 @@ class _PathReader(SourceReader):
         if self._fp is not None:
             self._fp.close()
             self._fp = None
+
+
+class FileReader(SourceReader):
+    """Reads from a file that is already open. The file is owned, and closed, by the caller."""
+
+    def __init__(self, fp: IO[bytes]) -> None:
+        """Wrap an open binary file."""
+        super().__init__()
+        self._fp = fp
+
+    @override
+    def __call__(self, offset: int, size: int) -> bytes | bytearray:
+        """Return up to `size` bytes starting at `offset`."""
+        if offset < 0 or size <= 0:
+            return b""
+        self._fp.seek(offset)
+        return self._fp.read(size)
 
 
 class _StreamReader(SourceReader):

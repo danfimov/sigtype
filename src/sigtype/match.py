@@ -1,4 +1,6 @@
+import pathlib
 from collections.abc import Sequence
+from typing import IO
 
 from sigtype.types import (
     APPLICATION,
@@ -11,7 +13,16 @@ from sigtype.types import (
     VIDEO,
 )
 from sigtype.types.base import Type
-from sigtype.utils import CallableReader, ReadableInput, ReadAt, SourceReader, get_bytes, make_reader
+from sigtype.utils import (
+    SIGNATURE_SIZE,
+    CallableReader,
+    FileReader,
+    ReadableInput,
+    ReadAt,
+    SourceReader,
+    get_bytes,
+    make_reader,
+)
 
 
 def match(obj: ReadableInput, matchers: Sequence[Type] = TYPES, *, read_at: ReadAt | None = None) -> Type | None:
@@ -30,7 +41,21 @@ def match(obj: ReadableInput, matchers: Sequence[Type] = TYPES, *, read_at: Read
     Raises:
         TypeError: if obj is not a supported type.
     """
-    buf = get_bytes(obj)
+    if isinstance(obj, (str, pathlib.PurePath)):
+        # The file is opened once: it supplies the signature bytes and any later reads of matchers that need more
+        with open(obj, "rb") as fp:  # noqa: PTH123
+            return _run_matchers(bytearray(fp.read(SIGNATURE_SIZE)), obj, matchers, read_at, fp)
+
+    return _run_matchers(get_bytes(obj), obj, matchers, read_at, None)
+
+
+def _run_matchers(
+    buf: bytes | bytearray,
+    obj: ReadableInput,
+    matchers: Sequence[Type],
+    read_at: ReadAt | None,
+    fp: IO[bytes] | None,
+) -> Type | None:
     # A fresh wrapper per call: the memo it carries must not outlive this input
     reader: SourceReader | None = CallableReader(read_at) if read_at is not None else None
     reader_resolved = read_at is not None
@@ -40,8 +65,8 @@ def match(obj: ReadableInput, matchers: Sequence[Type] = TYPES, *, read_at: Read
         for matcher in matchers:
             if matcher.needs_read_at:
                 if not reader_resolved:
-                    # built on first use and shared by every matcher of this call, so a file is opened at most once
-                    own_reader = make_reader(obj)
+                    # built on first use and shared by every matcher of this call
+                    own_reader = FileReader(fp) if fp is not None else make_reader(obj)
                     reader = own_reader
                     reader_resolved = True
                 if matcher.match_at(buf, reader):
