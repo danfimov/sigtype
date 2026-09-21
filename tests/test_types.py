@@ -1,3 +1,5 @@
+import io
+import zipfile
 from pathlib import Path
 
 import sigtype
@@ -108,6 +110,32 @@ class TestFileType:
             expected_mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             assert kind.mime == expected_mime
             assert kind.extension == "docx"
+
+    def test_guess_docx_with_leading_trash_entries(self):
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as zf:
+            zf.writestr("[trash]/0000.dat", b"junk")
+            zf.writestr("[trash]/0002.dat", b"junk")
+            zf.writestr("[trash]/0001.dat", b"junk")
+            zf.writestr("word/document.xml", "<w:document/>")
+            zf.writestr("word/footnotes.xml", "<w:footnotes/>")
+
+        kind = sigtype.guess(buf.getvalue())
+        assert kind is not None
+        expected_mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        assert kind.mime == expected_mime
+        assert kind.extension == "docx"
+
+    def test_guess_zip_is_not_misdetected_as_docx(self):
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as zf:
+            zf.writestr("readme.txt", "hello")
+            zf.writestr("data.bin", b"junk")
+
+        kind = sigtype.guess(buf.getvalue())
+        assert kind is not None
+        assert kind.mime == "application/zip"
+        assert kind.extension == "zip"
 
     def test_guess_odt(self):
         kind = sigtype.guess(FIXTURES + "/sample.odt")

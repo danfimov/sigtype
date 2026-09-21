@@ -8,7 +8,7 @@ _ZIP_SEARCH_RANGE: Final = 6000
 _ZIP_SIGNATURE_LENGTH: Final = 4
 _MIMETYPE_ENTRY_OFFSET: Final = 0x1E
 _MIMETYPE_CONTENT_OFFSET: Final = 0x26
-_OOXML_ENTRIES_TO_CHECK: Final = 4
+_OOXML_ENTRIES_TO_CHECK: Final = 8
 _OOXML_FILENAME_OFFSET: Final = 30
 
 
@@ -85,26 +85,16 @@ class OfficeOpenXml(ZippedDocumentBase):
 
     @override
     def match_document(self, buf: bytes | bytearray) -> bool:
-        """Match by inspecting the ZIP-embedded entry filenames."""
-        # Check if first file in archive is the identifying file
-        ft = self.match_filename(buf, _MIMETYPE_ENTRY_OFFSET)
-        if ft:
-            return ft
+        """Match by inspecting the ZIP-embedded entry filenames.
 
-        # Otherwise check that the fist file is one of these
-        if (
-            not self.compare_bytes(buf, b"[Content_Types].xml", _MIMETYPE_ENTRY_OFFSET)
-            and not self.compare_bytes(buf, b"_rels/.rels", _MIMETYPE_ENTRY_OFFSET)
-            and not self.compare_bytes(buf, b"docProps", _MIMETYPE_ENTRY_OFFSET)
-        ):
-            return False
-
-        # Loop through next 3 files and check if they match
-        # NOTE: OpenOffice/Libreoffice orders ZIP entry differently,
-        # so check the 4th file
-        # https://github.com/h2non/filetype/blob/d730d98ad5c990883148485b6fd5adbdd378364a/matchers/document.go#L134
+        Real-world OOXML files may carry unrelated entries (e.g. `[trash]/...`) ahead of the identifying `word/`, `ppt/`
+        or `xl/` entry, so every entry in the checked range is inspected instead of only the first one.
+        """
         idx = 0
         for _i in range(_OOXML_ENTRIES_TO_CHECK):
+            if ft := self.match_filename(buf, idx + _OOXML_FILENAME_OFFSET):
+                return ft
+
             # Search for next file header
             idx = self.search_signature(
                 buf,
@@ -113,11 +103,6 @@ class OfficeOpenXml(ZippedDocumentBase):
             )
             if idx == -1:
                 return False
-
-            # Filename is at file header + 30
-            ft = self.match_filename(buf, idx + _OOXML_FILENAME_OFFSET)
-            if ft:
-                return ft
         return False
 
     def match_filename(self, buf: bytes | bytearray, offset: int) -> bool:
