@@ -8,44 +8,9 @@ on:
 permissions:
   contents: read
 
-env:
-  CIBW_BUILD_VERBOSITY: 1
-
 jobs:
-  compiled-wheels:
-    name: Compiled wheels on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, macos-14, windows-latest]
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
-        with:
-          enable-cache: false
-          version: "latest"
-
-      - name: Set version from tag
-        shell: bash
-        run: |
-          set -euo pipefail
-          version="${GITHUB_REF_NAME#v}"
-          sed -i.bak "s/^__version__ = .*/__version__ = \"${version}\"/" src/sigtype/__init__.py
-          rm -f src/sigtype/__init__.py.bak
-          echo "Building sigtype ${version} (compiled)"
-
-      - uses: pypa/cibuildwheel@e090b81e30c4d855ea63bf4b6e59204c09a101ae # v4.2.1
-
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: wheels-${{ matrix.os }}
-          path: wheelhouse/*.whl
-
-  sdist-and-pure-wheel:
-    name: sdist and pure-Python wheel
+  build:
+    name: Build sdist and wheel
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -73,12 +38,12 @@ jobs:
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: sdist-and-pure-wheel
+          name: dist
           path: dist/*
 
   publish:
     name: Publish to PyPI
-    needs: [compiled-wheels, sdist-and-pure-wheel]
+    needs: [build]
     runs-on: ubuntu-latest
     environment:
       name: release

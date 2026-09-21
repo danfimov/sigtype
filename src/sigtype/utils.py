@@ -1,7 +1,7 @@
 import pathlib
 from collections.abc import Callable
 from pathlib import Path
-from typing import IO, Final, TypeVar, cast
+from typing import IO, Final, TypeVar
 
 from sigtype._compat import override
 
@@ -46,9 +46,7 @@ def signature(array: _Buffer) -> _Buffer:
     length = len(array)
     index = min(length, SIGNATURE_SIZE)
 
-    # mypyc's per-specialization type checking cannot verify that slicing preserves the concrete buffer type across this
-    # constrained TypeVar (regular mypy infers it fine, hence warn_redundant_casts is disabled for this module below).
-    return cast("_Buffer", array[:index])
+    return array[:index]
 
 
 def get_bytes(obj: ReadableInput) -> bytes | bytearray:

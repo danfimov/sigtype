@@ -35,7 +35,6 @@ dev = [
     { include-group = "test" },
     { include-group = "lint" },
     { include-group = "types" },
-    { include-group = "build" },
     "prek>=0.5.3",
 ]
 test = [
@@ -50,12 +49,9 @@ lint = [
 types = [
     "mypy>=2.3.1",
 ]
-build = [
-    "hatch-mypyc>=0.16.0",
-]
 
 [build-system]
-requires = ["hatchling", "hatch-mypyc>=0.16.0", "mypy>=2.3.1"]
+requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.version]
@@ -64,33 +60,12 @@ path = "src/sigtype/__init__.py"
 [tool.hatch.build.targets.wheel]
 packages = ["src/sigtype"]
 
-[tool.hatch.build.targets.wheel.hooks.mypyc]
-enable-by-default = false
-mypy-args = [
-    "--strict",
-    "--allow-any-generics",
-]
-exclude = [
-    "src/sigtype/__init__.py",
-    "src/sigtype/__main__.py",
-]
-require-runtime-dependencies = true
-
 [tool.hatch.build.targets.sdist]
 include = [
   "src/sigtype",
   "README.md",
   "LICENSE",
 ]
-
-[tool.cibuildwheel]
-build = "cp311-* cp312-* cp313-* cp314-*"
-skip = "*-win32 *_i686 *-musllinux_i686"
-build-frontend = "build[uv]"
-environment = { HATCH_BUILD_HOOKS_ENABLE = "1" }
-test-sources = ["tests"]
-test-command = "pytest tests -q"
-test-requires = ["pytest"]
 
 [tool.ruff]
 line-length = 120
@@ -139,7 +114,3 @@ enable_error_code = [
     "redundant-self",
     "deprecated",
 ]
-
-[[tool.mypy.overrides]]
-module = "sigtype.utils"
-disable_error_code = ["redundant-cast"]
