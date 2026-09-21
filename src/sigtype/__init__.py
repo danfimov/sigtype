@@ -4,7 +4,6 @@ from sigtype.filetype import (
     guess,
     guess_extension,
     guess_mime,
-    types,
 )
 from sigtype.helpers import (
     is_archive,
@@ -52,6 +51,5 @@ __all__ = [
     "is_mime_supported",
     "is_video",
     "match",
-    "types",
     "video_match",
 ]
