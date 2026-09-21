@@ -514,3 +514,26 @@ class TestOfd:
     def test_nested_ofd_xml_is_not_the_root_entry(self):
         assert sigtype.guess_extension(self._zip("docs/OFD.xml", "docs/x.xml")) == "zip"
         assert sigtype.guess_extension(self._zip("NOTOFD.xml", "x.xml")) == "zip"
+
+
+class TestEbooks:
+    def test_mobi(self):
+        data = b"Some Book Title".ljust(60, b"\x00") + b"BOOKMOBI" + b"\x00" * 100
+        kind = sigtype.guess(data)
+        assert kind is not None
+        assert (kind.mime, kind.extension) == ("application/x-mobipocket-ebook", "mobi")
+        assert sigtype.is_document(data)
+
+    def test_mobi_needs_the_marker_at_its_offset(self):
+        assert sigtype.guess_extension(b"BOOKMOBI" + b"\x00" * 100) is None
+        assert sigtype.guess_extension(b"x" * 61 + b"BOOKMOBI" + b"\x00" * 100) is None
+
+    def test_djvu(self):
+        for form in (b"DJVU", b"DJVM"):
+            data = b"AT&TFORM\x00\x00\x12\x34" + form + b"\x00" * 100
+            kind = sigtype.guess(data)
+            assert kind is not None
+            assert (kind.mime, kind.extension) == ("image/vnd.djvu", "djvu")
+
+    def test_iff_form_that_is_not_djvu(self):
+        assert sigtype.guess_extension(b"AT&TFORM\x00\x00\x12\x34DJVX" + b"\x00" * 100) is None

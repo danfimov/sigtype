@@ -414,3 +414,44 @@ class Msg(OleDocument):
     def match_entries(self, names: frozenset[str]) -> bool:
         """Match the MAPI property streams every Outlook message carries."""
         return "__properties_version1.0" in names or any(name.startswith("__substg1.0_") for name in names)
+
+
+_MOBI_TYPE_OFFSET: Final = 60
+_MOBI_TYPE: Final = b"BOOKMOBI"
+
+
+class Mobi(Type):
+    """Implements the Mobipocket e-book type matcher (also used by Kindle AZW/AZW3 files)."""
+
+    MIME: Final[str] = "application/x-mobipocket-ebook"
+    EXTENSION: Final[str] = "mobi"
+
+    def __init__(self) -> None:
+        """Initialize the Mobi matcher."""
+        super().__init__(mime=Mobi.MIME, extension=Mobi.EXTENSION)
+
+    @override
+    def match(self, buf: bytes | bytearray) -> bool:
+        """Match the PalmDB type and creator fields that identify Mobipocket books."""
+        return buf[_MOBI_TYPE_OFFSET : _MOBI_TYPE_OFFSET + len(_MOBI_TYPE)] == _MOBI_TYPE
+
+
+_DJVU_MAGIC: Final = b"AT&TFORM"
+_DJVU_FORM_OFFSET: Final = 12
+_DJVU_FORMS: Final = (b"DJVU", b"DJVM")
+
+
+class Djvu(Type):
+    """Implements the DjVu document type matcher."""
+
+    MIME: Final[str] = "image/vnd.djvu"
+    EXTENSION: Final[str] = "djvu"
+
+    def __init__(self) -> None:
+        """Initialize the Djvu matcher."""
+        super().__init__(mime=Djvu.MIME, extension=Djvu.EXTENSION)
+
+    @override
+    def match(self, buf: bytes | bytearray) -> bool:
+        """Match the IFF magic followed by a single page (DJVU) or multi-page (DJVM) form."""
+        return buf[: len(_DJVU_MAGIC)] == _DJVU_MAGIC and buf[_DJVU_FORM_OFFSET : _DJVU_FORM_OFFSET + 4] in _DJVU_FORMS

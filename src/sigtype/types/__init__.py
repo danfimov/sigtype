@@ -106,6 +106,8 @@ DOCUMENT: Final = (
     document.Ods(),
     document.Msg(),
     document.Ofd(),
+    document.Mobi(),
+    document.Djvu(),
     text.Fb2(),
     text.Eml(),
 )
