@@ -14,6 +14,7 @@ IMAGE: Final = (
     image.Png(),
     image.Gif(),
     image.Webp(),
+    image.Dcm(),
     image.Tiff(),
     image.Cr2(),
     image.Bmp(),
@@ -21,7 +22,6 @@ IMAGE: Final = (
     image.Psd(),
     image.Ico(),
     image.Heic(),
-    image.Dcm(),
     image.Avif(),
     image.Qoi(),
     image.Dds(),
@@ -61,7 +61,6 @@ FONT: Final = (font.Woff(), font.Woff2(), font.Ttf(), font.Otf())
 ARCHIVE: Final = (
     archive.Br(),
     archive.Rpm(),
-    archive.Dcm(),
     archive.Epub(),
     archive.Zip(),
     archive.Tar(),
@@ -98,12 +97,16 @@ DOCUMENT: Final = (
     document.Doc(),
     document.Docx(),
     document.Odt(),
-    document.Xls(),
-    document.Xlsx(),
-    document.Ods(),
+    # Ppt and Xls share the same OLE primary signature at offset 512
+    # (FD FF FF FF) and only differ by a weak secondary check, so Ppt's
+    # more specific secondary check must be tried first to avoid
+    # misidentifying legacy .ppt files as .xls.
     document.Ppt(),
     document.Pptx(),
     document.Odp(),
+    document.Xls(),
+    document.Xlsx(),
+    document.Ods(),
 )
 
 

@@ -83,6 +83,14 @@ class TestFileType:
         assert kind.mime == "image/tiff"
         assert kind.extension == "tif"
 
+    def test_guess_dicom_with_tiff_like_preamble(self):
+        preamble = b"II*\x00" + b"\x00" * 124
+        buf = preamble + b"DICM" + b"\x00" * 20
+        kind = sigtype.guess(buf)
+        assert kind is not None
+        assert kind.mime == "application/dicom"
+        assert kind.extension == "dcm"
+
     def test_guess_mov(self):
         kind = sigtype.guess(FIXTURES + "/sample.mov")
         assert kind is not None
@@ -163,6 +171,18 @@ class TestFileType:
 
     def test_guess_ppt(self):
         kind = sigtype.guess(FIXTURES + "/sample.ppt")
+        assert kind is not None
+        assert kind.mime == "application/vnd.ms-powerpoint"
+        assert kind.extension == "ppt"
+
+    def test_guess_ppt_not_misdetected_as_xls(self):
+        ole_signature = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+        buf = bytearray(600)
+        buf[0:8] = ole_signature
+        buf[512:516] = b"\xfd\xff\xff\xff"
+        buf[518] = 0x00  # satisfies Xls's weak secondary check
+        buf[522:524] = b"\x00\x00"  # satisfies Ppt's secondary check
+        kind = sigtype.guess(bytes(buf))
         assert kind is not None
         assert kind.mime == "application/vnd.ms-powerpoint"
         assert kind.extension == "ppt"
