@@ -689,8 +689,8 @@ class TestZipEntryMatchers:
     def test_only_the_first_entries_are_inspected(self):
         assert sigtype.guess_extension(self._zip([f"a{i}.txt" for i in range(8)] + ["word/document.xml"])) == "zip"
         assert sigtype.guess_extension(self._zip([f"a{i}.txt" for i in range(7)] + ["word/document.xml"])) == "docx"
-        assert sigtype.guess_extension(self._zip([f"a{i}.txt" for i in range(15)] + ["OFD.xml"])) == "ofd"
-        assert sigtype.guess_extension(self._zip([f"a{i}.txt" for i in range(16)] + ["OFD.xml"])) == "zip"
+        assert sigtype.guess_extension(self._zip([f"a{i}.txt" for i in range(7)] + ["OFD.xml"])) == "ofd"
+        assert sigtype.guess_extension(self._zip([f"a{i}.txt" for i in range(8)] + ["OFD.xml"])) == "zip"
 
     def test_shared_scan_does_not_leak_between_inputs(self):
         docx = self._zip(["[Content_Types].xml", "word/document.xml"])

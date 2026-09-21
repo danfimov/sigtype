@@ -10,11 +10,10 @@ _ZIP_SEARCH_RANGE: Final = 6000
 _ZIP_SIGNATURE_LENGTH: Final = 4
 _MIMETYPE_ENTRY_OFFSET: Final = 0x1E
 _MIMETYPE_CONTENT_OFFSET: Final = 0x26
-_OOXML_ENTRIES_TO_CHECK: Final = 8
 _ZIP_FILENAME_OFFSET: Final = 30
 _ZIP_FILENAME_LENGTH_OFFSET: Final = 26
 _ZIP_FILENAME_LENGTH_SIZE: Final = 2
-_ZIP_ENTRIES_TO_SCAN: Final = 16
+_ZIP_ENTRIES_TO_SCAN: Final = 8
 _ZIP_FILENAME_PREFIX_SIZE: Final = 8
 _ZIP_ENTRIES_MEMO_KEY: Final = "zip.entries"
 _OFD_ROOT_ENTRY: Final = b"OFD.xml"
@@ -156,7 +155,7 @@ class OfficeOpenXml(ZipEntryDocument):
         Real-world OOXML files may carry unrelated entries (e.g. `[trash]/...`) ahead of the identifying `word/`, `ppt/`
         or `xl/` entry, so every entry in the checked range is inspected instead of only the first one.
         """
-        return any(prefix.startswith(self.ENTRY_PREFIX) for _, prefix in entries[:_OOXML_ENTRIES_TO_CHECK])
+        return any(prefix.startswith(self.ENTRY_PREFIX) for _, prefix in entries)
 
 
 class Ofd(ZipEntryDocument):
