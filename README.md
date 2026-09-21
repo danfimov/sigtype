@@ -43,6 +43,34 @@ print(kind.mime)  # image/jpeg
 print(kind.extension)  # jpg
 ```
 
+### How much data is read
+
+Matchers see the first `sigtype.SIGNATURE_SIZE` bytes (8192) of the input, so passing more than that
+is pointless. Paths are opened and read for you. For file-like objects the position is restored after the call and
+reading always starts from the beginning of the stream, so the same object can be passed again.
+Streams that are not seekable are read from their current position.
+
+A few formats keep their identifying data further into the file, e.g. the directory of a Word or Excel
+document, or a FLAC marker behind a large ID3 tag. For paths, in-memory buffers and seekable streams sigtype reads
+the missing parts on demand. If your data lives elsewhere (an HTTP server, object storage), pass a `read_at`
+callable that returns up to `size` bytes starting at `offset`:
+
+```python
+import sigtype
+
+head = fetch_range(url, 0, sigtype.SIGNATURE_SIZE)
+
+
+def read_at(offset: int, size: int) -> bytes:
+    return fetch_range(url, offset, size)
+
+
+kind = sigtype.guess(head, read_at=read_at)
+```
+
+`read_at` is only called by the matchers that need it, and only when the leading bytes are not enough.
+Without it those matchers fall back to what they can tell from the leading bytes.
+
 If you only need the MIME type or the extension, use the dedicated shortcuts:
 
 ```python
@@ -144,6 +172,31 @@ sigtype.add_type(Foo())
 
 kind = sigtype.guess_mime("sample.foo")
 print(kind)  # "application/foo"
+```
+
+A matcher that needs data beyond the first 8192 bytes sets `needs_read_at = True` and overrides
+`match_at()`. `read_at` is `None` when the input cannot be read back, and the matcher must handle that:
+
+```python
+from typing import ClassVar
+
+from sigtype.types import Type
+from sigtype.utils import ReadAt
+
+
+class Bar(Type):
+    needs_read_at: ClassVar[bool] = True
+
+    def __init__(self) -> None:
+        super().__init__(mime="application/bar", extension="bar")
+
+    def match(self, buf: bytes | bytearray) -> bool:
+        return self.match_at(buf, None)
+
+    def match_at(self, buf: bytes | bytearray, read_at: ReadAt | None) -> bool:
+        if read_at is None:
+            return False
+        return read_at(100_000, 3) == b"BAR"
 ```
 
 ## Supported types
