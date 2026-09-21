@@ -63,7 +63,7 @@ def _run_matchers(
 
     try:
         for matcher in matchers:
-            if matcher.uses_read_at:
+            if matcher.needs_read_at:
                 if not reader_resolved:
                     # built on first use and shared by every matcher of this call
                     own_reader = FileReader(fp) if fp is not None else make_reader(obj)

@@ -5,17 +5,12 @@ import pytest
 
 import sigtype
 import sigtype.types.audio
-import sigtype.types.base
 import sigtype.utils
 
 from .cfb_builder import build_cfb
 
 # Absolute path to fixtures directory
 FIXTURES = str(Path(__file__).resolve().parent / "fixtures")
-
-# In compiled (mypyc) builds `Type` is a native class that interpreted code cannot subclass
-COMPILED = not sigtype.types.base.__file__.endswith(".py")
-SUBCLASSING_UNSUPPORTED = pytest.mark.skipif(COMPILED, reason="interpreted classes cannot inherit from compiled Type")
 
 
 class TestFileType:
@@ -310,7 +305,6 @@ class TestPathInput:
         for name in ("sample.jpg", "sample.zip", "sample.doc", "sample.xlsx"):
             assert sigtype.guess_mime(Path(FIXTURES) / name) == sigtype.guess_mime(FIXTURES + "/" + name)
 
-    @SUBCLASSING_UNSUPPORTED
     def test_file_is_closed_when_a_matcher_raises(self, tmp_path):
         class Boom(sigtype.types.Type):
             needs_read_at = True
@@ -333,7 +327,6 @@ class TestPathInput:
 
 
 class TestReadAtFlag:
-    @SUBCLASSING_UNSUPPORTED
     def test_class_level_flag_is_honoured_by_custom_matchers(self):
         seen = []
 
@@ -354,8 +347,8 @@ class TestReadAtFlag:
             def match(self, buf):
                 return buf[:2] == b"PL"
 
-        assert NeedsMore().uses_read_at
-        assert not Plain().uses_read_at
+        assert NeedsMore().needs_read_at
+        assert not Plain().needs_read_at
         assert sigtype.match(b"NM....", [Plain(), NeedsMore()]).extension == "nm"
         assert sigtype.match(b"PL....", [NeedsMore(), Plain()]).extension == "pl"
         assert seen == [True, True]

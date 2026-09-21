@@ -26,9 +26,6 @@ class Type:
         self.__mime = mime
         self.__extension = extension
         self.__aliases = aliases
-        # Copy of the class level flag: guess() checks it for every matcher on every call, and an instance
-        # attribute is much cheaper to read than a class variable in compiled (mypyc) builds.
-        self.uses_read_at: bool = type(self).needs_read_at
 
     @property
     def mime(self) -> str:
