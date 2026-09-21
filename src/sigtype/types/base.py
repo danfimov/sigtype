@@ -22,11 +22,11 @@ class Type:
 
     def is_extension(self, extension: str) -> bool:
         """Check whether the given extension matches this type."""
-        return self.__extension is extension
+        return self.__extension == extension
 
     def is_mime(self, mime: str) -> bool:
         """Check whether the given MIME type matches this type."""
-        return self.__mime is mime
+        return self.__mime == mime
 
     def match(self, buf: bytes | bytearray) -> bool:
         """Check whether the given buffer matches this type's signature."""

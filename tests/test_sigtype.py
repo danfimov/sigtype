@@ -108,3 +108,18 @@ class TestFileTypeMIME:
         buf = bytearray([0x49, 0x49, 0x2A, 0x0])
         mime = sigtype.guess_mime(buf)
         assert mime is None
+
+
+class TestTypeComparison:
+    def test_is_extension_compares_by_value(self):
+        kind = sigtype.guess(FIXTURES + "/sample.jpg")
+        assert kind is not None
+        # runtime-built strings are not interned, so identity comparison would fail
+        assert kind.is_extension("xjpg"[1:])
+        assert not kind.is_extension("png")
+
+    def test_is_mime_compares_by_value(self):
+        kind = sigtype.guess(FIXTURES + "/sample.jpg")
+        assert kind is not None
+        assert kind.is_mime("ximage/jpeg"[1:])
+        assert not kind.is_mime("image/png")
