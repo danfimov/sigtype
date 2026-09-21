@@ -3,6 +3,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import IO, Final, TypeVar, cast
 
+from sigtype._compat import override
+
 # Number of leading bytes handed to every matcher
 SIGNATURE_SIZE: Final = 8192
 
@@ -94,60 +96,92 @@ def _get_bytes_from_stream(stream: IO[bytes]) -> bytes | bytearray:
     return get_bytes(stream.read(SIGNATURE_SIZE))
 
 
-def make_reader(obj: ReadableInput) -> ReadAt | None:
+class SourceReader:
+    """Random access reader over an input, usable as a `ReadAt` callable.
+
+    Readers built by `make_reader()` may hold an open file, so callers must `close()` them when done.
+    """
+
+    def __call__(self, offset: int, size: int) -> bytes | bytearray:
+        """Return up to `size` bytes starting at `offset`."""
+        raise NotImplementedError
+
+    def close(self) -> None:
+        """Release any resources held by the reader. The reader stays usable and reacquires them on demand."""
+
+
+class _MemoryReader(SourceReader):
+    def __init__(self, data: bytes | bytearray) -> None:
+        self._data = data
+
+    @override
+    def __call__(self, offset: int, size: int) -> bytes | bytearray:
+        if offset < 0 or size <= 0:
+            return b""
+        return self._data[offset : offset + size]
+
+
+class _PathReader(SourceReader):
+    """Opens the file on the first read and keeps it open until closed, so several reads cost a single open."""
+
+    def __init__(self, path: str | pathlib.PurePath) -> None:
+        self._path = path
+        self._fp: IO[bytes] | None = None
+
+    @override
+    def __call__(self, offset: int, size: int) -> bytes | bytearray:
+        if offset < 0 or size <= 0:
+            return b""
+        if self._fp is None:
+            self._fp = open(self._path, "rb")  # noqa: PTH123, SIM115
+        self._fp.seek(offset)
+        return self._fp.read(size)
+
+    @override
+    def close(self) -> None:
+        if self._fp is not None:
+            self._fp.close()
+            self._fp = None
+
+
+class _StreamReader(SourceReader):
+    """Reads from a seekable stream, restoring its position afterwards. The stream is owned by the caller."""
+
+    def __init__(self, stream: IO[bytes]) -> None:
+        self._stream = stream
+
+    @override
+    def __call__(self, offset: int, size: int) -> bytes | bytearray:
+        if offset < 0 or size <= 0:
+            return b""
+        start_pos = self._stream.tell()
+        try:
+            self._stream.seek(offset)
+            return self._stream.read(size)
+        finally:
+            self._stream.seek(start_pos)
+
+
+def make_reader(obj: ReadableInput) -> SourceReader | None:
     """Build a random access reader for the given input.
 
     Args:
         obj: path to file, bytes, bytearray, memoryview or file-like object.
 
     Returns:
-        A `read_at(offset, size)` callable. None for inputs that cannot be read back
-        at arbitrary offsets, e.g. non-seekable streams.
+        A reader to be used as a `read_at(offset, size)` callable, which the caller must `close()`.
+        None for inputs that cannot be read back at arbitrary offsets, e.g. non-seekable streams.
     """
     if isinstance(obj, (bytes, bytearray)):
-        return _memory_reader(obj)
+        return _MemoryReader(obj)
 
     if isinstance(obj, memoryview):
-        return _memory_reader(obj.tobytes())
+        return _MemoryReader(obj.tobytes())
 
     if isinstance(obj, (str, pathlib.PurePath)):
-        return _path_reader(obj)
+        return _PathReader(obj)
 
     if hasattr(obj, "read") and hasattr(obj, "seek") and hasattr(obj, "tell"):
-        return _stream_reader(obj)
+        return _StreamReader(obj)
 
     return None
-
-
-def _memory_reader(data: bytes | bytearray) -> ReadAt:
-    def read_at(offset: int, size: int) -> bytes | bytearray:
-        if offset < 0 or size <= 0:
-            return b""
-        return data[offset : offset + size]
-
-    return read_at
-
-
-def _path_reader(path: str | pathlib.PurePath) -> ReadAt:
-    def read_at(offset: int, size: int) -> bytes | bytearray:
-        if offset < 0 or size <= 0:
-            return b""
-        with open(path, "rb") as fp:  # noqa: PTH123
-            fp.seek(offset)
-            return fp.read(size)
-
-    return read_at
-
-
-def _stream_reader(stream: IO[bytes]) -> ReadAt:
-    def read_at(offset: int, size: int) -> bytes | bytearray:
-        if offset < 0 or size <= 0:
-            return b""
-        start_pos = stream.tell()
-        try:
-            stream.seek(offset)
-            return stream.read(size)
-        finally:
-            stream.seek(start_pos)
-
-    return read_at

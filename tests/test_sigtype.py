@@ -1,9 +1,13 @@
 import io
 from pathlib import Path
 
+import pytest
+
 import sigtype
 import sigtype.types.audio
 import sigtype.utils
+
+from .cfb_builder import build_cfb
 
 # Absolute path to fixtures directory
 FIXTURES = str(Path(__file__).resolve().parent / "fixtures")
@@ -246,3 +250,47 @@ class TestTextDetection:
         assert sigtype.is_text(str(path))
         assert sigtype.is_text(path)
         assert sigtype.is_text(io.BytesIO(b"just a note\n"))
+
+
+class TestSourceReader:
+    def test_path_reader_reads_repeatedly_and_can_be_closed(self, tmp_path):
+        path = tmp_path / "data.bin"
+        path.write_bytes(bytes(range(100)))
+        reader = sigtype.utils.make_reader(str(path))
+        assert reader is not None
+        assert reader(10, 3) == bytes([10, 11, 12])
+        assert reader(0, 2) == bytes([0, 1])
+        assert reader(98, 10) == bytes([98, 99])
+        assert reader(100, 10) == b""
+        reader.close()
+        reader.close()
+        # a closed reader reopens the file on demand
+        assert reader(5, 1) == bytes([5])
+        reader.close()
+
+    def test_readers_reject_negative_offsets_and_empty_reads(self, tmp_path):
+        path = tmp_path / "data.bin"
+        path.write_bytes(b"abcdef")
+        for source in (str(path), b"abcdef", bytearray(b"abcdef"), memoryview(b"abcdef"), io.BytesIO(b"abcdef")):
+            reader = sigtype.utils.make_reader(source)
+            assert reader is not None
+            assert reader(-1, 3) == b""
+            assert reader(2, 0) == b""
+            assert reader(2, 2) == b"cd"
+            reader.close()
+
+    def test_non_seekable_input_has_no_reader(self):
+        assert sigtype.utils.make_reader(object()) is None  # type: ignore[arg-type]
+
+    @pytest.mark.skipif(not Path("/proc/self/fd").exists(), reason="needs /proc to count open files")
+    def test_guess_does_not_leak_file_descriptors(self, tmp_path):
+        path = tmp_path / "late.xls"
+        path.write_bytes(bytes(build_cfb(["Workbook"], padding_sectors=20)))
+
+        def open_files() -> int:
+            return len(list(Path("/proc/self/fd").iterdir()))
+
+        before = open_files()
+        for _ in range(20):
+            assert sigtype.guess_extension(str(path)) == "xls"
+        assert open_files() == before

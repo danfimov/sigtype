@@ -11,7 +11,7 @@ from sigtype.types import (
     VIDEO,
 )
 from sigtype.types.base import Type
-from sigtype.utils import ReadableInput, ReadAt, get_bytes, make_reader
+from sigtype.utils import ReadableInput, ReadAt, SourceReader, get_bytes, make_reader
 
 
 def match(obj: ReadableInput, matchers: Sequence[Type] = TYPES, *, read_at: ReadAt | None = None) -> Type | None:
@@ -33,16 +33,23 @@ def match(obj: ReadableInput, matchers: Sequence[Type] = TYPES, *, read_at: Read
     buf = get_bytes(obj)
     reader = read_at
     reader_resolved = read_at is not None
+    own_reader: SourceReader | None = None
 
-    for matcher in matchers:
-        if matcher.needs_read_at:
-            if not reader_resolved:
-                reader = make_reader(obj)
-                reader_resolved = True
-            if matcher.match_at(buf, reader):
+    try:
+        for matcher in matchers:
+            if matcher.needs_read_at:
+                if not reader_resolved:
+                    # built on first use and shared by every matcher of this call, so a file is opened at most once
+                    own_reader = make_reader(obj)
+                    reader = own_reader
+                    reader_resolved = True
+                if matcher.match_at(buf, reader):
+                    return matcher
+            elif matcher.match(buf):
                 return matcher
-        elif matcher.match(buf):
-            return matcher
+    finally:
+        if own_reader is not None:
+            own_reader.close()
 
     return None
 
