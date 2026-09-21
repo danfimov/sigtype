@@ -103,6 +103,7 @@ DOCUMENT: Final = (
     document.Xls(),
     document.Xlsx(),
     document.Ods(),
+    document.Msg(),
 )
 
 

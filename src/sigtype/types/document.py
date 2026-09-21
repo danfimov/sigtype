@@ -1,7 +1,9 @@
-from typing import Final
+from typing import ClassVar, Final
 
 from sigtype._compat import override
 from sigtype.types.base import Type
+from sigtype.types.cfb import OLE_SIGNATURE, read_root_entry_names
+from sigtype.utils import ReadAt
 
 _ZIP_LOCAL_FILE_HEADER: Final = b"PK\x03\x04"
 _ZIP_SEARCH_RANGE: Final = 6000
@@ -116,7 +118,40 @@ class OfficeOpenXml(ZippedDocumentBase):
         return False
 
 
-_OLE_SIGNATURE: Final = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+class OleDocument(Type):
+    """Base matcher for formats stored in a Compound File Binary (OLE2) container.
+
+    All of them share one container signature, so the type is decided by the streams found under the root of the
+    container. When the container directory cannot be read (e.g. it lies past the available data and no `read_at`
+    is given), legacy byte-offset heuristics are used instead where a subclass provides them.
+    """
+
+    needs_read_at: ClassVar[bool] = True
+
+    @override
+    def match(self, buf: bytes | bytearray) -> bool:
+        """Match using only the leading bytes."""
+        return self.match_at(buf, None)
+
+    @override
+    def match_at(self, buf: bytes | bytearray, read_at: ReadAt | None) -> bool:
+        """Match by the streams stored in the container, reading the directory on demand."""
+        if buf[:8] != OLE_SIGNATURE:
+            return False
+
+        names = read_root_entry_names(buf, read_at)
+        if names is None:
+            return self.match_signature(buf)
+        return self.match_entries(names)
+
+    def match_entries(self, names: frozenset[str]) -> bool:
+        """Match by the names of the root's direct children. Implemented by subclasses."""
+        raise NotImplementedError
+
+    def match_signature(self, buf: bytes | bytearray) -> bool:  # noqa: ARG002
+        """Fallback used when the container directory is unreadable. Matches nothing by default."""
+        return False
+
 
 _DOC_MIN_SIZE: Final = 515
 _DOC_SUBHEADER_OFFSET: Final = 512
@@ -137,7 +172,7 @@ _DOC_WORDDOCUMENT_END: Final = 663
 _DOC_WORDDOCUMENT: Final = b"W\x00o\x00r\x00d\x00D\x00o\x00c\x00u\x00m\x00e\x00n\x00t"
 
 
-class Doc(Type):
+class Doc(OleDocument):
     """Implements the Microsoft Word (Office 97-2003) document type matcher."""
 
     MIME: Final[str] = "application/msword"
@@ -148,9 +183,14 @@ class Doc(Type):
         super().__init__(mime=Doc.MIME, extension=Doc.EXTENSION)
 
     @override
-    def match(self, buf: bytes | bytearray) -> bool:
+    def match_entries(self, names: frozenset[str]) -> bool:
+        """Match the Word document stream."""
+        return "WordDocument" in names
+
+    @override
+    def match_signature(self, buf: bytes | bytearray) -> bool:
         """Match the OLE-based Word 97-2003 document signature."""
-        if len(buf) > _DOC_MIN_SIZE and buf[0:8] == _OLE_SIGNATURE:
+        if len(buf) > _DOC_MIN_SIZE and buf[0:8] == OLE_SIGNATURE:
             if buf[_DOC_SUBHEADER_OFFSET:_DOC_SUBHEADER_END] == _DOC_SUBHEADER:
                 return True
             if len(buf) > _DOC_MARKER_MIN_SIZE and (
@@ -203,7 +243,7 @@ _XLS_CALC_MARKER_END: Final = 2095
 _XLS_CALC_MARKER: Final = b"\xe2\x00\x00\x00\x5c\x00\x70\x00\x04\x00\x00Calc"
 
 
-class Xls(Type):
+class Xls(OleDocument):
     """Implements the Microsoft Excel (Office 97-2003) document type matcher."""
 
     MIME: Final[str] = "application/vnd.ms-excel"
@@ -214,9 +254,14 @@ class Xls(Type):
         super().__init__(mime=Xls.MIME, extension=Xls.EXTENSION)
 
     @override
-    def match(self, buf: bytes | bytearray) -> bool:
+    def match_entries(self, names: frozenset[str]) -> bool:
+        """Match the workbook stream (`Book` is used by Excel 5.0/95)."""
+        return "Workbook" in names or "Book" in names
+
+    @override
+    def match_signature(self, buf: bytes | bytearray) -> bool:
         """Match the OLE-based Excel 97-2003 document signature."""
-        if len(buf) > _XLS_MIN_SIZE and buf[0:8] == _OLE_SIGNATURE:
+        if len(buf) > _XLS_MIN_SIZE and buf[0:8] == OLE_SIGNATURE:
             if buf[_DOC_SUBHEADER_OFFSET:_DOC_SUBHEADER_END] == _XLS_MARKER1 and (
                 buf[_XLS_MARKER1_BYTE_OFFSET] == _XLS_MARKER1_BYTE_A
                 or buf[_XLS_MARKER1_BYTE_OFFSET] == _XLS_MARKER1_BYTE_B
@@ -266,7 +311,7 @@ _PPT_TITLE_END: Final = 2096
 _PPT_TITLE: Final = b"\x00\xb9\x29\xe8\x11\x00\x00\x00MS PowerPoint 97"
 
 
-class Ppt(Type):
+class Ppt(OleDocument):
     """Implements the Microsoft PowerPoint (Office 97-2003) document type matcher."""
 
     MIME: Final[str] = "application/vnd.ms-powerpoint"
@@ -277,9 +322,14 @@ class Ppt(Type):
         super().__init__(mime=Ppt.MIME, extension=Ppt.EXTENSION)
 
     @override
-    def match(self, buf: bytes | bytearray) -> bool:
+    def match_entries(self, names: frozenset[str]) -> bool:
+        """Match the PowerPoint document stream."""
+        return "PowerPoint Document" in names
+
+    @override
+    def match_signature(self, buf: bytes | bytearray) -> bool:
         """Match the OLE-based PowerPoint 97-2003 document signature."""
-        if len(buf) > _PPT_MIN_SIZE and buf[0:8] == _OLE_SIGNATURE:
+        if len(buf) > _PPT_MIN_SIZE and buf[0:8] == OLE_SIGNATURE:
             if buf[_DOC_SUBHEADER_OFFSET:_DOC_SUBHEADER_END] == _PPT_MARKER_A:
                 return True
             if buf[_DOC_SUBHEADER_OFFSET:_DOC_SUBHEADER_END] == _PPT_MARKER_B:
@@ -317,3 +367,19 @@ class Odp(OpenDocument):
     def __init__(self) -> None:
         """Initialize the Odp matcher."""
         super().__init__(mime=Odp.MIME, extension=Odp.EXTENSION)
+
+
+class Msg(OleDocument):
+    """Implements the Microsoft Outlook message (.msg) type matcher."""
+
+    MIME: Final[str] = "application/vnd.ms-outlook"
+    EXTENSION: Final[str] = "msg"
+
+    def __init__(self) -> None:
+        """Initialize the Msg matcher."""
+        super().__init__(mime=Msg.MIME, extension=Msg.EXTENSION)
+
+    @override
+    def match_entries(self, names: frozenset[str]) -> bool:
+        """Match the MAPI property streams every Outlook message carries."""
+        return "__properties_version1.0" in names or any(name.startswith("__substg1.0_") for name in names)

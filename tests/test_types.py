@@ -4,6 +4,10 @@ from pathlib import Path
 
 import sigtype
 import sigtype.types
+import sigtype.types.document
+from sigtype.types.cfb import read_root_entry_names
+
+from .cfb_builder import build_cfb
 
 # Absolute path to fixtures directory
 FIXTURES = str(Path(__file__).resolve().parent / "fixtures")
@@ -285,3 +289,84 @@ class TestPdfWithLeadingJunk:
 
     def test_mention_without_version_is_ignored(self):
         assert sigtype.guess_mime(b"\x01\x02 see %PDF- spec \x03" + b"\x00" * 32) is None
+
+
+class TestOleDocuments:
+    """OLE2 formats are told apart by the streams in the container directory, not by byte offsets."""
+
+    PPT_STREAMS = ("PowerPoint Document", "Current User", "\x05SummaryInformation", "\x05DocumentSummaryInformation")
+
+    @staticmethod
+    def _ext(data) -> str | None:
+        return sigtype.guess_extension(bytes(data))
+
+    def test_doc_xls_ppt_msg(self):
+        assert self._ext(build_cfb(["WordDocument", "1Table"])) == "doc"
+        assert self._ext(build_cfb(["Workbook"])) == "xls"
+        assert self._ext(build_cfb(["PowerPoint Document"])) == "ppt"
+        assert self._ext(build_cfb(["__properties_version1.0", ("__substg1.0_0037001F", [])])) == "msg"
+
+    def test_msg_mime(self):
+        kind = sigtype.guess(bytes(build_cfb(["__properties_version1.0"])))
+        assert kind is not None
+        assert kind.mime == "application/vnd.ms-outlook"
+
+    def test_excel_5_book_stream(self):
+        assert self._ext(build_cfb(["Book"])) == "xls"
+
+    def test_ppt_sharing_signature_with_xls_is_not_taken_for_xls(self):
+        # The FAT of this container starts with FD FF FF FF at offset 512, and the legacy Xls heuristic accepts
+        # it while the legacy Ppt one rejects it.
+        data = bytes(build_cfb(list(self.PPT_STREAMS)))
+        assert data[512:520] == b"\xfd\xff\xff\xff\x02\x00\x00\x00"
+        assert sigtype.types.document.Xls().match_signature(data)
+        assert not sigtype.types.document.Ppt().match_signature(data)
+        assert self._ext(data) == "ppt"
+
+    def test_unknown_ole_container_is_not_office(self):
+        data = build_cfb(["VisioDocument"])
+        assert self._ext(data) is None
+
+    def test_embedded_object_does_not_change_the_type(self):
+        data = bytes(build_cfb(["WordDocument", ("ObjectPool", ["Workbook"])]))
+        assert self._ext(data) == "doc"
+        assert not sigtype.types.document.Xls().match(data)
+
+    def test_4096_byte_sectors(self):
+        assert self._ext(build_cfb(["WordDocument"], sector_shift=12)) == "doc"
+
+    def test_directory_past_signature_window(self, tmp_path):
+        data = bytes(build_cfb(["Workbook"], padding_sectors=20))
+        assert len(data) > sigtype.SIGNATURE_SIZE * 1.3
+
+        assert self._ext(data) == "xls"
+
+        path = tmp_path / "late.xls"
+        path.write_bytes(data)
+        assert sigtype.guess_extension(str(path)) == "xls"
+        assert sigtype.guess_extension(io.BytesIO(data)) == "xls"
+
+        head = data[: sigtype.SIGNATURE_SIZE]
+        assert sigtype.guess_extension(head, read_at=lambda offset, size: data[offset : offset + size]) == "xls"
+
+    def test_directory_past_signature_window_without_reader(self):
+        data = bytes(build_cfb(["Workbook"], padding_sectors=20))
+        assert read_root_entry_names(data[: sigtype.SIGNATURE_SIZE], None) is None
+        # nothing to go on for the directory, so the byte-offset heuristics decide and must not raise
+        assert sigtype.types.document.Doc().match(data[: sigtype.SIGNATURE_SIZE]) is False
+
+    def test_cyclic_directory_chain_terminates(self):
+        data = build_cfb(list(self.PPT_STREAMS))
+        data[512 + 4 * 2 : 512 + 4 * 3] = (2).to_bytes(4, "little")  # second directory sector points to itself
+        assert read_root_entry_names(bytes(data), None) is None
+
+    def test_truncated_container(self):
+        data = bytes(build_cfb(["WordDocument"]))
+        assert read_root_entry_names(data[:600], None) is None
+        assert read_root_entry_names(data[:100], None) is None
+
+    def test_real_fixtures(self):
+        for name, ext in (("sample.doc", "doc"), ("sample.xls", "xls"), ("sample.ppt", "ppt")):
+            assert sigtype.guess_extension(FIXTURES + "/" + name) == ext
+            data = Path(FIXTURES + "/" + name).read_bytes()
+            assert read_root_entry_names(data, None) is not None
