@@ -1,9 +1,9 @@
-from typing import ClassVar, Final
+from typing import ClassVar, Final, cast
 
 from sigtype._compat import override
 from sigtype.types.base import Type
 from sigtype.types.cfb import OLE_SIGNATURE, read_root_entry_names
-from sigtype.utils import ReadAt
+from sigtype.utils import ReadAt, SourceReader
 
 _ZIP_LOCAL_FILE_HEADER: Final = b"PK\x03\x04"
 _ZIP_SEARCH_RANGE: Final = 6000
@@ -11,11 +11,16 @@ _ZIP_SIGNATURE_LENGTH: Final = 4
 _MIMETYPE_ENTRY_OFFSET: Final = 0x1E
 _MIMETYPE_CONTENT_OFFSET: Final = 0x26
 _OOXML_ENTRIES_TO_CHECK: Final = 8
-_OOXML_FILENAME_OFFSET: Final = 30
+_ZIP_FILENAME_OFFSET: Final = 30
 _ZIP_FILENAME_LENGTH_OFFSET: Final = 26
 _ZIP_FILENAME_LENGTH_SIZE: Final = 2
-_OFD_ENTRIES_TO_CHECK: Final = 16
+_ZIP_ENTRIES_TO_SCAN: Final = 16
+_ZIP_FILENAME_PREFIX_SIZE: Final = 8
+_ZIP_ENTRIES_MEMO_KEY: Final = "zip.entries"
 _OFD_ROOT_ENTRY: Final = b"OFD.xml"
+
+# A scanned local file header: length of the filename and its first bytes
+_ZipEntry = tuple[int, bytes]
 
 
 class ZippedDocumentBase(Type):
@@ -47,26 +52,6 @@ class ZippedDocumentBase(Type):
 
         return buf[start_offset : start_offset + sl] == subslice
 
-    def search_signature(
-        self,
-        buf: bytes | bytearray,
-        start: int,
-        range_num: int,
-    ) -> int:
-        """Search for the ZIP local file header signature within a byte range."""
-        length = len(buf)
-
-        end = start + range_num
-        end = min(end, length)
-
-        if start >= end:
-            return -1
-
-        try:
-            return buf.index(_ZIP_LOCAL_FILE_HEADER, start, end)
-        except ValueError:
-            return -1
-
 
 class OpenDocument(ZippedDocumentBase):
     """Base matcher for OpenDocument formats (ODT, ODS, ODP)."""
@@ -86,43 +71,95 @@ class OpenDocument(ZippedDocumentBase):
         )
 
 
-class OfficeOpenXml(ZippedDocumentBase):
-    """Base matcher for Office Open XML formats (DOCX, XLSX, PPTX)."""
+def _search_signature(buf: bytes | bytearray, start: int, range_num: int) -> int:
+    """Search for the ZIP local file header signature within a byte range."""
+    end = min(start + range_num, len(buf))
+
+    if start >= end:
+        return -1
+
+    try:
+        return buf.index(_ZIP_LOCAL_FILE_HEADER, start, end)
+    except ValueError:
+        return -1
+
+
+def _scan_zip_entries(buf: bytes | bytearray) -> list[_ZipEntry]:
+    entries: list[_ZipEntry] = []
+    idx = 0
+    for _i in range(_ZIP_ENTRIES_TO_SCAN):
+        length_start = idx + _ZIP_FILENAME_LENGTH_OFFSET
+        name_length = int.from_bytes(buf[length_start : length_start + _ZIP_FILENAME_LENGTH_SIZE], "little")
+        name_start = idx + _ZIP_FILENAME_OFFSET
+        entries.append((name_length, bytes(buf[name_start : name_start + _ZIP_FILENAME_PREFIX_SIZE])))
+
+        # Search for next file header
+        idx = _search_signature(buf, idx + _ZIP_SIGNATURE_LENGTH, _ZIP_SEARCH_RANGE)
+        if idx == -1:
+            break
+    return entries
+
+
+def _zip_entries(buf: bytes | bytearray, read_at: ReadAt | None) -> list[_ZipEntry]:
+    """Scan the leading local file headers of a ZIP archive.
+
+    Several matchers (docx, xlsx, pptx, ofd) look at the same entries, so when `read_at` is a `SourceReader`
+    the result is remembered on it and the scan runs once per input.
+    """
+    if not isinstance(read_at, SourceReader):
+        return _scan_zip_entries(buf)
+
+    cached = read_at.memo.get(_ZIP_ENTRIES_MEMO_KEY)
+    if cached is not None:
+        return cast("list[_ZipEntry]", cached)
+
+    entries = _scan_zip_entries(buf)
+    read_at.memo[_ZIP_ENTRIES_MEMO_KEY] = entries
+    return entries
+
+
+class ZipEntryDocument(ZippedDocumentBase):
+    """Base matcher for ZIP based formats identified by the names of the entries in the archive."""
+
+    # Only used to share the scan of the archive between matchers through the reader, no data past the
+    # signature window is read.
+    needs_read_at: ClassVar[bool] = True
 
     @override
-    def match_document(self, buf: bytes | bytearray) -> bool:
+    def match(self, buf: bytes | bytearray) -> bool:
+        """Match using only the leading bytes."""
+        return self.match_at(buf, None)
+
+    @override
+    def match_at(self, buf: bytes | bytearray, read_at: ReadAt | None) -> bool:
+        """Match documents starting with a ZIP local file header signature and the expected entries."""
+        if not self.compare_bytes(buf, _ZIP_LOCAL_FILE_HEADER, 0):
+            return False
+
+        return self.match_entries(_zip_entries(buf, read_at))
+
+    def match_entries(self, entries: list[_ZipEntry]) -> bool:
+        """Match by the scanned archive entries. Implemented by subclasses."""
+        raise NotImplementedError
+
+
+class OfficeOpenXml(ZipEntryDocument):
+    """Base matcher for Office Open XML formats (DOCX, XLSX, PPTX)."""
+
+    # Directory that identifies the format, e.g. `word/` for DOCX
+    ENTRY_PREFIX: ClassVar[bytes] = b""
+
+    @override
+    def match_entries(self, entries: list[_ZipEntry]) -> bool:
         """Match by inspecting the ZIP-embedded entry filenames.
 
         Real-world OOXML files may carry unrelated entries (e.g. `[trash]/...`) ahead of the identifying `word/`, `ppt/`
         or `xl/` entry, so every entry in the checked range is inspected instead of only the first one.
         """
-        idx = 0
-        for _i in range(_OOXML_ENTRIES_TO_CHECK):
-            if ft := self.match_filename(buf, idx + _OOXML_FILENAME_OFFSET):
-                return ft
-
-            # Search for next file header
-            idx = self.search_signature(
-                buf,
-                idx + _ZIP_SIGNATURE_LENGTH,
-                _ZIP_SEARCH_RANGE,
-            )
-            if idx == -1:
-                return False
-        return False
-
-    def match_filename(self, buf: bytes | bytearray, offset: int) -> bool:
-        """Determine the OOXML kind from the entry filename at `offset`."""
-        if self.compare_bytes(buf, b"word/", offset):
-            return self.mime == ("application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-        if self.compare_bytes(buf, b"ppt/", offset):
-            return self.mime == ("application/vnd.openxmlformats-officedocument.presentationml.presentation")
-        if self.compare_bytes(buf, b"xl/", offset):
-            return self.mime == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        return False
+        return any(prefix.startswith(self.ENTRY_PREFIX) for _, prefix in entries[:_OOXML_ENTRIES_TO_CHECK])
 
 
-class Ofd(ZippedDocumentBase):
+class Ofd(ZipEntryDocument):
     """Implements the OFD (Open Fixed-layout Document, GB/T 33190) type matcher."""
 
     MIME: Final[str] = "application/ofd"
@@ -133,20 +170,9 @@ class Ofd(ZippedDocumentBase):
         super().__init__(mime=Ofd.MIME, extension=Ofd.EXTENSION)
 
     @override
-    def match_document(self, buf: bytes | bytearray) -> bool:
+    def match_entries(self, entries: list[_ZipEntry]) -> bool:
         """Match by looking for the `OFD.xml` root entry among the first ZIP entries."""
-        idx = 0
-        for _i in range(_OFD_ENTRIES_TO_CHECK):
-            length_start = idx + _ZIP_FILENAME_LENGTH_OFFSET
-            name_length = int.from_bytes(buf[length_start : length_start + _ZIP_FILENAME_LENGTH_SIZE], "little")
-            name_start = idx + _OOXML_FILENAME_OFFSET
-            if buf[name_start : name_start + name_length] == _OFD_ROOT_ENTRY:
-                return True
-
-            idx = self.search_signature(buf, idx + _ZIP_SIGNATURE_LENGTH, _ZIP_SEARCH_RANGE)
-            if idx == -1:
-                return False
-        return False
+        return any(length == len(_OFD_ROOT_ENTRY) and prefix.startswith(_OFD_ROOT_ENTRY) for length, prefix in entries)
 
 
 class OleDocument(Type):
@@ -244,6 +270,7 @@ class Docx(OfficeOpenXml):
 
     MIME: Final[str] = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     EXTENSION: Final[str] = "docx"
+    ENTRY_PREFIX: ClassVar[bytes] = b"word/"
 
     def __init__(self) -> None:
         """Initialize the Docx matcher."""
@@ -311,6 +338,7 @@ class Xlsx(OfficeOpenXml):
 
     MIME: Final[str] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     EXTENSION: Final[str] = "xlsx"
+    ENTRY_PREFIX: ClassVar[bytes] = b"xl/"
 
     def __init__(self) -> None:
         """Initialize the Xlsx matcher."""
@@ -383,6 +411,7 @@ class Pptx(OfficeOpenXml):
 
     MIME: Final[str] = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
     EXTENSION: Final[str] = "pptx"
+    ENTRY_PREFIX: ClassVar[bytes] = b"ppt/"
 
     def __init__(self) -> None:
         """Initialize the Pptx matcher."""

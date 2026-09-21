@@ -665,3 +665,48 @@ class TestOleDirectoryIsParsedOnce:
         # the same window in both calls, only the reader (i.e. the rest of the file) differs
         assert sigtype.guess_extension(word[: sigtype.SIGNATURE_SIZE], read_at=reader_for(word)) == "doc"
         assert sigtype.guess_extension(word[: sigtype.SIGNATURE_SIZE], read_at=reader_for(sheet)) == "xls"
+
+
+class TestZipEntryMatchers:
+    @staticmethod
+    def _zip(names: list[str]) -> bytes:
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as zf:
+            for name in names:
+                zf.writestr(name, "x")
+        return buf.getvalue()
+
+    def test_ooxml_kinds_are_told_apart(self):
+        assert sigtype.guess_extension(self._zip(["[Content_Types].xml", "word/document.xml"])) == "docx"
+        assert sigtype.guess_extension(self._zip(["[Content_Types].xml", "xl/workbook.xml"])) == "xlsx"
+        assert sigtype.guess_extension(self._zip(["[Content_Types].xml", "ppt/presentation.xml"])) == "pptx"
+
+    def test_identifying_entry_after_trash_entries(self):
+        names = [f"[trash]/{i:04}.dat" for i in range(4)] + ["word/document.xml"]
+        assert sigtype.guess_extension(self._zip(names)) == "docx"
+
+    def test_only_the_first_entries_are_inspected(self):
+        assert sigtype.guess_extension(self._zip([f"a{i}.txt" for i in range(8)] + ["word/document.xml"])) == "zip"
+        assert sigtype.guess_extension(self._zip([f"a{i}.txt" for i in range(7)] + ["word/document.xml"])) == "docx"
+        assert sigtype.guess_extension(self._zip([f"a{i}.txt" for i in range(15)] + ["OFD.xml"])) == "ofd"
+        assert sigtype.guess_extension(self._zip([f"a{i}.txt" for i in range(16)] + ["OFD.xml"])) == "zip"
+
+    def test_shared_scan_does_not_leak_between_inputs(self):
+        docx = self._zip(["[Content_Types].xml", "word/document.xml"])
+        xlsx = self._zip(["[Content_Types].xml", "xl/workbook.xml"])
+        ofd = self._zip(["OFD.xml", "Doc_0/Document.xml"])
+
+        def reader_for(data: bytes):
+            return lambda offset, size: data[offset : offset + size]
+
+        for _ in range(2):
+            for data, ext in ((docx, "docx"), (xlsx, "xlsx"), (ofd, "ofd")):
+                assert sigtype.guess_extension(data) == ext
+                assert sigtype.guess_extension(data, read_at=reader_for(data)) == ext
+
+    def test_direct_matcher_use(self):
+        docx = self._zip(["[Content_Types].xml", "word/document.xml"])
+        assert sigtype.types.document.Docx().match(docx)
+        assert not sigtype.types.document.Xlsx().match(docx)
+        assert not sigtype.types.document.Ofd().match(docx)
+        assert not sigtype.types.document.Docx().match(b"not a zip at all")
