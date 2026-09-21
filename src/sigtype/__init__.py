@@ -25,12 +25,14 @@ from sigtype.match import (
     match,
     video_match,
 )
+from sigtype.utils import SIGNATURE_SIZE
 
 __version__ = "0.1.0"
 version = __version__
 
 
 __all__ = [
+    "SIGNATURE_SIZE",
     "add_type",
     "application_match",
     "archive_match",

@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import sigtype
+import sigtype.utils
 
 # Absolute path to fixtures directory
 FIXTURES = str(Path(__file__).resolve().parent / "fixtures")
@@ -123,3 +124,14 @@ class TestTypeComparison:
         assert kind is not None
         assert kind.is_mime("ximage/jpeg"[1:])
         assert not kind.is_mime("image/png")
+
+
+class TestSignatureSize:
+    def test_constant_is_exposed(self):
+        assert sigtype.SIGNATURE_SIZE == 8192
+
+    def test_only_signature_size_bytes_are_read(self, tmp_path):
+        path = tmp_path / "big.bin"
+        path.write_bytes(b"\x00" * (sigtype.SIGNATURE_SIZE * 2))
+        assert len(sigtype.utils.get_bytes(str(path))) == sigtype.SIGNATURE_SIZE
+        assert len(sigtype.utils.get_bytes(path.read_bytes())) == sigtype.SIGNATURE_SIZE
