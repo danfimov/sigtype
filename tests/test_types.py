@@ -262,3 +262,26 @@ class TestFontMime:
 
     def test_is_font(self):
         assert sigtype.is_font(b"OTTO\x00" + b"\x00" * 16)
+
+
+class TestPdfWithLeadingJunk:
+    BODY = b"%PDF-1.7\n%\xe2\xe3\xcf\xd3\n1 0 obj\n" + b"\x00" * 64
+
+    def test_plain(self):
+        assert sigtype.guess_mime(self.BODY) == "application/pdf"
+
+    def test_file_name_before_header(self):
+        assert sigtype.guess_mime(b"firmas_t/1082774737.png" + self.BODY) == "application/pdf"
+
+    def test_html_before_header(self):
+        buf = b'<html><head><meta http-equiv="refresh" content="0;url=http://dns"></head></html>\n' + self.BODY
+        assert sigtype.guess_mime(buf) == "application/pdf"
+
+    def test_leading_newline(self):
+        assert sigtype.guess_mime(b"\n" + self.BODY) == "application/pdf"
+
+    def test_header_beyond_search_range_is_ignored(self):
+        assert sigtype.guess_mime(b"\x01" * 1024 + self.BODY) is None
+
+    def test_mention_without_version_is_ignored(self):
+        assert sigtype.guess_mime(b"\x01\x02 see %PDF- spec \x03" + b"\x00" * 32) is None
