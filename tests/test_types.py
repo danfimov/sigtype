@@ -487,3 +487,30 @@ class TestPlainText:
         kind = self._guess(b'<svg xmlns="http://www.w3.org/2000/svg"/>')
         assert kind is not None
         assert kind.extension == "svg"
+
+
+class TestOfd:
+    @staticmethod
+    def _zip(*names: str, compress: bool = False) -> bytes:
+        buf = io.BytesIO()
+        method = zipfile.ZIP_DEFLATED if compress else zipfile.ZIP_STORED
+        with zipfile.ZipFile(buf, "w", method) as zf:
+            for name in names:
+                zf.writestr(name, "<xml>" + name * 20 + "</xml>")
+        return buf.getvalue()
+
+    def test_ofd(self):
+        kind = sigtype.guess(self._zip("OFD.xml", "Doc_0/Document.xml", "Doc_0/Pages/Page_0/Content.xml"))
+        assert kind is not None
+        assert (kind.mime, kind.extension) == ("application/ofd", "ofd")
+
+    def test_ofd_root_entry_not_first(self):
+        data = self._zip("Doc_0/Document.xml", "Doc_0/Res/PublicRes.xml", "OFD.xml", compress=True)
+        assert sigtype.guess_extension(data) == "ofd"
+
+    def test_plain_zip_is_not_ofd(self):
+        assert sigtype.guess_extension(self._zip("a.txt", "b.txt")) == "zip"
+
+    def test_nested_ofd_xml_is_not_the_root_entry(self):
+        assert sigtype.guess_extension(self._zip("docs/OFD.xml", "docs/x.xml")) == "zip"
+        assert sigtype.guess_extension(self._zip("NOTOFD.xml", "x.xml")) == "zip"

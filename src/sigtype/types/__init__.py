@@ -105,6 +105,7 @@ DOCUMENT: Final = (
     document.Xlsx(),
     document.Ods(),
     document.Msg(),
+    document.Ofd(),
     text.Fb2(),
     text.Eml(),
 )

@@ -153,5 +153,5 @@ print(kind)  # "application/foo"
 - **Audio**: aac, mid, mp3, m4a, ogg, flac, wav, amr, aiff
 - **Archive**: br, rpm, dcm, epub, zip, tar, rar, gz, bz2, 7z, pdf, exe, swf, rtf, nes, crx, cab, eot, ps, xz, sqlite, deb, ar, z, lzop, lz, elf, lz4, zst
 - **Font**: woff, woff2, ttf, otf
-- **Document**: doc, docx, odt, xls, xlsx, ods, ppt, pptx, odp, msg, fb2, eml
+- **Document**: doc, docx, odt, xls, xlsx, ods, ppt, pptx, odp, msg, fb2, eml, ofd
 - **Application**: wasm

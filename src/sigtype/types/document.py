@@ -12,6 +12,10 @@ _MIMETYPE_ENTRY_OFFSET: Final = 0x1E
 _MIMETYPE_CONTENT_OFFSET: Final = 0x26
 _OOXML_ENTRIES_TO_CHECK: Final = 8
 _OOXML_FILENAME_OFFSET: Final = 30
+_ZIP_FILENAME_LENGTH_OFFSET: Final = 26
+_ZIP_FILENAME_LENGTH_SIZE: Final = 2
+_OFD_ENTRIES_TO_CHECK: Final = 16
+_OFD_ROOT_ENTRY: Final = b"OFD.xml"
 
 
 class ZippedDocumentBase(Type):
@@ -115,6 +119,33 @@ class OfficeOpenXml(ZippedDocumentBase):
             return self.mime == ("application/vnd.openxmlformats-officedocument.presentationml.presentation")
         if self.compare_bytes(buf, b"xl/", offset):
             return self.mime == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        return False
+
+
+class Ofd(ZippedDocumentBase):
+    """Implements the OFD (Open Fixed-layout Document, GB/T 33190) type matcher."""
+
+    MIME: Final[str] = "application/ofd"
+    EXTENSION: Final[str] = "ofd"
+
+    def __init__(self) -> None:
+        """Initialize the Ofd matcher."""
+        super().__init__(mime=Ofd.MIME, extension=Ofd.EXTENSION)
+
+    @override
+    def match_document(self, buf: bytes | bytearray) -> bool:
+        """Match by looking for the `OFD.xml` root entry among the first ZIP entries."""
+        idx = 0
+        for _i in range(_OFD_ENTRIES_TO_CHECK):
+            length_start = idx + _ZIP_FILENAME_LENGTH_OFFSET
+            name_length = int.from_bytes(buf[length_start : length_start + _ZIP_FILENAME_LENGTH_SIZE], "little")
+            name_start = idx + _OOXML_FILENAME_OFFSET
+            if buf[name_start : name_start + name_length] == _OFD_ROOT_ENTRY:
+                return True
+
+            idx = self.search_signature(buf, idx + _ZIP_SIGNATURE_LENGTH, _ZIP_SEARCH_RANGE)
+            if idx == -1:
+                return False
         return False
 
 
