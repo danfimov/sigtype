@@ -1,5 +1,6 @@
-from typing import Final, override
+from typing import Final
 
+from file_type._compat import override
 from file_type.types.base import Type
 
 _MIDI_MIN_LENGTH: Final = 3
