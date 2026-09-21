@@ -13,6 +13,10 @@ _OTF_SIGNATURE: Final = bytes([0x4F, 0x54, 0x54, 0x4F, 0x00])
 _WOFF_MIN_LENGTH: Final = 7
 _SFNT_MIN_LENGTH: Final = 4
 
+# Deprecated by RFC 8081 in favour of font/woff, font/ttf and font/otf. Still accepted when looking a type up.
+_WOFF_ALIASES: Final = ("application/font-woff",)
+_SFNT_ALIASES: Final = ("application/font-sfnt",)
+
 
 class Woff(Type):
     """Implements the WOFF font type matcher."""
@@ -22,7 +26,7 @@ class Woff(Type):
 
     def __init__(self) -> None:
         """Initialize the Woff matcher."""
-        super().__init__(mime=Woff.MIME, extension=Woff.EXTENSION)
+        super().__init__(mime=Woff.MIME, extension=Woff.EXTENSION, aliases=_WOFF_ALIASES)
 
     @override
     def match(self, buf: bytes | bytearray) -> bool:
@@ -72,7 +76,7 @@ class Ttf(Type):
 
     def __init__(self) -> None:
         """Initialize the Ttf matcher."""
-        super().__init__(mime=Ttf.MIME, extension=Ttf.EXTENSION)
+        super().__init__(mime=Ttf.MIME, extension=Ttf.EXTENSION, aliases=_SFNT_ALIASES)
 
     @override
     def match(self, buf: bytes | bytearray) -> bool:
@@ -88,7 +92,7 @@ class Otf(Type):
 
     def __init__(self) -> None:
         """Initialize the Otf matcher."""
-        super().__init__(mime=Otf.MIME, extension=Otf.EXTENSION)
+        super().__init__(mime=Otf.MIME, extension=Otf.EXTENSION, aliases=_SFNT_ALIASES)
 
     @override
     def match(self, buf: bytes | bytearray) -> bool:

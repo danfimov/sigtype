@@ -66,13 +66,13 @@ def get_type(mime: str | None = None, ext: str | None = None) -> Type | None:
 
     Args:
         ext: file extension string. E.g: jpg, png, mp4, mp3
-        mime: MIME string. E.g: image/jpeg, video/mpeg
+        mime: MIME string, canonical or a known alias. E.g: image/jpeg, video/mpeg
 
     Returns:
         The matched file type instance. Otherwise None.
     """
     for kind in TYPES:
-        if kind.extension == ext or kind.mime == mime:
+        if kind.extension == ext or (mime is not None and kind.is_mime(mime)):
             return kind
     return None
 

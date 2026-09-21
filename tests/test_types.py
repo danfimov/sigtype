@@ -267,6 +267,40 @@ class TestFontMime:
     def test_is_font(self):
         assert sigtype.is_font(b"OTTO\x00" + b"\x00" * 16)
 
+    def test_deprecated_mime_aliases_still_resolve(self):
+        woff = sigtype.get_type(mime="application/font-woff")
+        assert woff is not None
+        assert woff.extension == "woff"
+        assert woff.mime == "font/woff"
+
+        sfnt = sigtype.get_type(mime="application/font-sfnt")
+        assert sfnt is not None
+        assert sfnt.mime in ("font/ttf", "font/otf")
+
+        assert sigtype.is_mime_supported("application/font-woff")
+        assert sigtype.is_mime_supported("application/font-sfnt")
+        assert sigtype.is_mime_supported("font/woff2")
+
+    def test_is_mime_accepts_aliases_but_guess_returns_the_canonical_one(self):
+        kind = sigtype.guess(b"wOFF\x00\x01\x00\x00" + b"\x00" * 16)
+        assert kind is not None
+        assert kind.is_mime("font/woff")
+        assert kind.is_mime("application/font-woff")
+        assert not kind.is_mime("application/font-sfnt")
+        assert kind.mime == "font/woff"
+        assert kind.aliases == ("application/font-woff",)
+
+    def test_woff2_does_not_claim_the_woff_alias(self):
+        kind = sigtype.guess(b"wOF2\x00\x01\x00\x00" + b"\x00" * 16)
+        assert kind is not None
+        assert not kind.is_mime("application/font-woff")
+
+    def test_types_without_aliases(self):
+        kind = sigtype.guess(FIXTURES + "/sample.jpg")
+        assert kind is not None
+        assert kind.aliases == ()
+        assert sigtype.get_type(mime="no/such-type") is None
+
 
 class TestPdfWithLeadingJunk:
     BODY = b"%PDF-1.7\n%\xe2\xe3\xcf\xd3\n1 0 obj\n" + b"\x00" * 64

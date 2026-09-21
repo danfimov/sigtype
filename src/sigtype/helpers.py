@@ -34,7 +34,7 @@ def is_mime_supported(mime: str) -> bool:
         True if the MIME type is supported.
         Otherwise False.
     """
-    return any(kind.mime == mime for kind in TYPES)
+    return any(kind.is_mime(mime) for kind in TYPES)
 
 
 def is_image(obj: ReadableInput) -> bool:
