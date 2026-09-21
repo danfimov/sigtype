@@ -2,6 +2,7 @@ import re
 from typing import Final
 
 from sigtype._compat import override
+from sigtype.text import looks_like_text
 from sigtype.types.base import Type
 
 # Everything allowed before the root element of an XML document: BOM, whitespace, declaration, comments and DOCTYPE.
@@ -34,6 +35,15 @@ _MESSAGE_HEADERS: Final = frozenset(
     },
 )
 _MIN_MESSAGE_HEADERS: Final = 2
+
+# Markdown constructs that are hard to mistake for something else. Headings (`# ...`) and lists (`- ...`) are
+# left out on purpose: they are just as common in shell scripts and YAML, where `#` starts a comment.
+_MARKDOWN: Final = re.compile(
+    rb"^(?:```|~~~)"  # fenced code block
+    rb"|\]\((?:https?://|mailto:|#|/|\./|\.\./)[^)\s]*\)"  # inline link or image
+    rb"|(?<![\w*])\*\*(?=\S)[^*\n]+?(?<=\S)\*\*(?![\w*])",  # bold text
+    re.MULTILINE,
+)
 
 
 def _xml_root(buf: bytes | bytearray) -> bytes | None:
@@ -107,3 +117,35 @@ class Eml(Type):
             # otherwise the signature window cut the last line short, which is fine
 
         return len(names & _MESSAGE_HEADERS) >= _MIN_MESSAGE_HEADERS
+
+
+class Txt(Type):
+    """Implements the plain text type matcher. Matches any non-empty input that looks like text."""
+
+    MIME: Final[str] = "text/plain"
+    EXTENSION: Final[str] = "txt"
+
+    def __init__(self) -> None:
+        """Initialize the Txt matcher."""
+        super().__init__(mime=Txt.MIME, extension=Txt.EXTENSION)
+
+    @override
+    def match(self, buf: bytes | bytearray) -> bool:
+        """Match text, see `sigtype.is_text` for what counts as text."""
+        return len(buf) > 0 and looks_like_text(buf)
+
+
+class Md(Type):
+    """Implements the Markdown type matcher. A heuristic: text using unambiguous Markdown syntax."""
+
+    MIME: Final[str] = "text/markdown"
+    EXTENSION: Final[str] = "md"
+
+    def __init__(self) -> None:
+        """Initialize the Md matcher."""
+        super().__init__(mime=Md.MIME, extension=Md.EXTENSION)
+
+    @override
+    def match(self, buf: bytes | bytearray) -> bool:
+        """Match text containing a fenced code block, a link to a URL or path, or bold text."""
+        return looks_like_text(buf) and _MARKDOWN.search(buf) is not None

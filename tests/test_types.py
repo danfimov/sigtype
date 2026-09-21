@@ -440,3 +440,50 @@ class TestTextBasedTypes:
 
     def test_binary_is_not_eml(self):
         assert sigtype.guess_extension(b"From:\x00\x01\x02To:\x00\x00Subject:\x00") is None
+
+
+class TestPlainText:
+    @staticmethod
+    def _guess(data: bytes):
+        return sigtype.match(data, [*sigtype.types.TYPES, *sigtype.types.PLAIN_TEXT])
+
+    def test_plain_text(self):
+        kind = self._guess(b"Just some notes.\nAnother line.\n")
+        assert kind is not None
+        assert (kind.mime, kind.extension) == ("text/plain", "txt")
+
+    def test_markdown(self):
+        for data in (
+            b"# Title\n\nSee [the docs](https://example.com/docs) for more.\n",
+            b"Intro\n\n```python\nprint('hi')\n```\n",
+            b"Some **important** words.\n",
+            b"![logo](./logo.png)\n",
+        ):
+            kind = self._guess(data)
+            assert kind is not None
+            assert (kind.mime, kind.extension) == ("text/markdown", "md"), data
+
+    def test_code_and_config_are_not_markdown(self):
+        for data in (
+            b"# comment\n- item\n- other\nkey: value\n",
+            b"#!/bin/sh\n# comment\necho done\n",
+            b"# Title-looking comment\nx = a**2 + b**3\n",
+            b"handlers[name](arg)\n",
+            b"__init__ and __all__\n",
+        ):
+            kind = self._guess(data)
+            assert kind is not None
+            assert kind.extension == "txt", data
+
+    def test_binary_is_not_text(self):
+        assert self._guess(b"\x00\x01\x02") is None
+        assert self._guess(b"") is None
+
+    def test_default_guess_does_not_return_text(self):
+        assert sigtype.guess(b"Just some notes.\nAnother line.\n") is None
+        assert sigtype.guess(b"# Title\n\n```\ncode\n```\n") is None
+
+    def test_binary_types_win_over_text(self):
+        kind = self._guess(b'<svg xmlns="http://www.w3.org/2000/svg"/>')
+        assert kind is not None
+        assert kind.extension == "svg"

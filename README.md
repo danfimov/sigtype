@@ -79,6 +79,18 @@ sigtype.is_text("notes.txt")  # True
 sigtype.is_binary("sample.jpg")  # True
 ```
 
+`guess()` returns `None` for plain text on purpose. If you want `txt` and `md` results too, pass the opt-in
+matchers explicitly after the regular ones. Markdown detection is a heuristic: it only reacts to fenced code
+blocks, links to URLs or paths and bold text.
+
+```python
+import sigtype
+from sigtype.types import PLAIN_TEXT, TYPES
+
+kind = sigtype.match("README.md", [*TYPES, *PLAIN_TEXT])
+print(kind.mime)  # text/markdown
+```
+
 You can also check whether a MIME type or an extension is supported at all:
 
 ```python

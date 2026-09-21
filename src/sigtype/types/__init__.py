@@ -109,6 +109,9 @@ DOCUMENT: Final = (
     text.Eml(),
 )
 
+# Plain text matchers. Not part of TYPES, since any text file would match them and guess() would stop returning
+# None for unknown data. Pass them explicitly: `sigtype.match(obj, [*TYPES, *PLAIN_TEXT])`. Md must precede Txt.
+PLAIN_TEXT: Final = (text.Md(), text.Txt())
 
 # Expose supported type matchers
 TYPES: Final = list(IMAGE + AUDIO + VIDEO + FONT + DOCUMENT + ARCHIVE + APPLICATION)
@@ -120,6 +123,7 @@ __all__ = [
     "DOCUMENT",
     "FONT",
     "IMAGE",
+    "PLAIN_TEXT",
     "TYPES",
     "VIDEO",
     "Type",
