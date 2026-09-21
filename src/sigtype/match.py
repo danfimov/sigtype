@@ -11,7 +11,7 @@ from sigtype.types import (
     VIDEO,
 )
 from sigtype.types.base import Type
-from sigtype.utils import ReadableInput, ReadAt, SourceReader, get_bytes, make_reader
+from sigtype.utils import CallableReader, ReadableInput, ReadAt, SourceReader, get_bytes, make_reader
 
 
 def match(obj: ReadableInput, matchers: Sequence[Type] = TYPES, *, read_at: ReadAt | None = None) -> Type | None:
@@ -31,7 +31,8 @@ def match(obj: ReadableInput, matchers: Sequence[Type] = TYPES, *, read_at: Read
         TypeError: if obj is not a supported type.
     """
     buf = get_bytes(obj)
-    reader = read_at
+    # A fresh wrapper per call: the memo it carries must not outlive this input
+    reader: SourceReader | None = CallableReader(read_at) if read_at is not None else None
     reader_resolved = read_at is not None
     own_reader: SourceReader | None = None
 

@@ -1,7 +1,7 @@
 import struct
-from typing import Final
+from typing import Final, cast
 
-from sigtype.utils import ReadAt
+from sigtype.utils import ReadAt, SourceReader
 
 OLE_SIGNATURE: Final = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
 
@@ -27,13 +27,17 @@ _ROOT_STORAGE: Final = 5
 _ENTRY_FIELDS: Final = struct.Struct("<HBxIII")
 _ENTRY_FIELDS_OFFSET: Final = 64
 
+_MEMO_KEY: Final = "cfb.root_entry_names"
+_NOT_COMPUTED: Final = object()
+
 
 def read_root_entry_names(buf: bytes | bytearray, read_at: ReadAt | None) -> frozenset[str] | None:
     """Read the names of the entries directly under the root of a Compound File Binary (OLE2) container.
 
     OLE2 based formats (doc, xls, ppt, msg, ...) share one container signature and are told apart by the streams
     they hold, e.g. `WordDocument` or `Workbook`. The directory can sit anywhere in the file, so sectors outside
-    `buf` are fetched through `read_at`.
+    `buf` are fetched through `read_at`. When `read_at` is a `SourceReader`, the result is remembered on it, so
+    that the several OLE matchers tried on one input parse the directory only once.
 
     Args:
         buf: the first bytes of the input.
@@ -42,6 +46,20 @@ def read_root_entry_names(buf: bytes | bytearray, read_at: ReadAt | None) -> fro
     Returns:
         Names of the root's direct children, or None if the directory could not be read completely.
     """
+    if not isinstance(read_at, SourceReader):
+        return _compute_root_entry_names(buf, read_at)
+
+    cached = read_at.memo.get(_MEMO_KEY, _NOT_COMPUTED)
+    if cached is not _NOT_COMPUTED:
+        return cast("frozenset[str] | None", cached)
+
+    names = _compute_root_entry_names(buf, read_at)
+    read_at.memo[_MEMO_KEY] = names
+    return names
+
+
+def _compute_root_entry_names(buf: bytes | bytearray, read_at: ReadAt | None) -> frozenset[str] | None:
+    """Parse the container directory. See `read_root_entry_names`."""
     if len(buf) < _HEADER_SIZE or buf[:8] != OLE_SIGNATURE:
         return None
 

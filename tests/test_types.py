@@ -622,3 +622,46 @@ class TestMatroska:
 
     def test_ebml_header_with_another_doctype(self):
         assert sigtype.guess_extension(self._doc(b"other")) is None
+
+
+class TestOleDirectoryIsParsedOnce:
+    def _count_reads(self, data: bytes, matchers) -> int:
+        calls = []
+
+        def read_at(offset: int, size: int) -> bytes:
+            calls.append(offset)
+            return data[offset : offset + size]
+
+        sigtype.match(data[: sigtype.SIGNATURE_SIZE], matchers, read_at=read_at)
+        return len(calls)
+
+    def test_reads_do_not_grow_with_the_number_of_ole_matchers(self):
+        data = bytes(build_cfb(["Workbook"], padding_sectors=20))
+        doc, xls, ppt, msg = (
+            sigtype.types.document.Doc(),
+            *(t() for t in (sigtype.types.document.Xls, sigtype.types.document.Ppt, sigtype.types.document.Msg)),
+        )
+
+        single = self._count_reads(data, [xls])
+        assert single > 0
+        # Doc runs first and does not match, then Xls matches: still one directory read in total
+        assert self._count_reads(data, [doc, xls]) == single
+        assert self._count_reads(data, [doc, ppt, msg, xls]) == single
+
+    def test_memo_does_not_leak_between_calls(self):
+        word = bytes(build_cfb(["WordDocument"], padding_sectors=20))
+        sheet = bytes(build_cfb(["Workbook"], padding_sectors=20))
+        for _ in range(3):
+            assert sigtype.guess_extension(word) == "doc"
+            assert sigtype.guess_extension(sheet) == "xls"
+
+    def test_memo_does_not_leak_through_a_reused_callable(self):
+        word = bytes(build_cfb(["WordDocument"], padding_sectors=20))
+        sheet = bytes(build_cfb(["Workbook"], padding_sectors=20))
+
+        def reader_for(data: bytes):
+            return lambda offset, size: data[offset : offset + size]
+
+        # the same window in both calls, only the reader (i.e. the rest of the file) differs
+        assert sigtype.guess_extension(word[: sigtype.SIGNATURE_SIZE], read_at=reader_for(word)) == "doc"
+        assert sigtype.guess_extension(word[: sigtype.SIGNATURE_SIZE], read_at=reader_for(sheet)) == "xls"

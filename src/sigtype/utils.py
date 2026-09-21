@@ -100,7 +100,14 @@ class SourceReader:
     """Random access reader over an input, usable as a `ReadAt` callable.
 
     Readers built by `make_reader()` may hold an open file, so callers must `close()` them when done.
+
+    A reader belongs to a single input. `memo` lets matchers share a computed result, such as a parsed container
+    directory, between each other for as long as the reader lives.
     """
+
+    def __init__(self) -> None:
+        """Create a reader with an empty memo."""
+        self.memo: dict[str, object] = {}
 
     def __call__(self, offset: int, size: int) -> bytes | bytearray:
         """Return up to `size` bytes starting at `offset`."""
@@ -112,6 +119,7 @@ class SourceReader:
 
 class _MemoryReader(SourceReader):
     def __init__(self, data: bytes | bytearray) -> None:
+        super().__init__()
         self._data = data
 
     @override
@@ -125,6 +133,7 @@ class _PathReader(SourceReader):
     """Opens the file on the first read and keeps it open until closed, so several reads cost a single open."""
 
     def __init__(self, path: str | pathlib.PurePath) -> None:
+        super().__init__()
         self._path = path
         self._fp: IO[bytes] | None = None
 
@@ -148,6 +157,7 @@ class _StreamReader(SourceReader):
     """Reads from a seekable stream, restoring its position afterwards. The stream is owned by the caller."""
 
     def __init__(self, stream: IO[bytes]) -> None:
+        super().__init__()
         self._stream = stream
 
     @override
@@ -160,6 +170,20 @@ class _StreamReader(SourceReader):
             return self._stream.read(size)
         finally:
             self._stream.seek(start_pos)
+
+
+class CallableReader(SourceReader):
+    """Adapts a caller supplied `read_at` callable, giving matchers the shared `memo` of a reader."""
+
+    def __init__(self, read_at: ReadAt) -> None:
+        """Wrap the given `read_at` callable."""
+        super().__init__()
+        self._read_at = read_at
+
+    @override
+    def __call__(self, offset: int, size: int) -> bytes | bytearray:
+        """Delegate to the wrapped callable."""
+        return self._read_at(offset, size)
 
 
 def make_reader(obj: ReadableInput) -> SourceReader | None:
