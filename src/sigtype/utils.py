@@ -1,4 +1,5 @@
 import pathlib
+from collections.abc import Callable
 from pathlib import Path
 from typing import IO, Final, TypeVar, cast
 
@@ -6,6 +7,10 @@ from typing import IO, Final, TypeVar, cast
 SIGNATURE_SIZE: Final = 8192
 
 ReadableInput = str | Path | bytes | bytearray | memoryview | IO[bytes]
+
+# Random access into the input: `read_at(offset, size)` returns up to `size` bytes starting at `offset`
+# (fewer, or none, when the input is shorter). Lets matchers look past the first SIGNATURE_SIZE bytes.
+ReadAt = Callable[[int, int], bytes | bytearray]
 
 _Buffer = TypeVar("_Buffer", bytes, bytearray, memoryview)
 
@@ -87,3 +92,62 @@ def _get_bytes_from_stream(stream: IO[bytes]) -> bytes | bytearray:
         stream.seek(start_pos)
         return get_bytes(magic_bytes)
     return get_bytes(stream.read(SIGNATURE_SIZE))
+
+
+def make_reader(obj: ReadableInput) -> ReadAt | None:
+    """Build a random access reader for the given input.
+
+    Args:
+        obj: path to file, bytes, bytearray, memoryview or file-like object.
+
+    Returns:
+        A `read_at(offset, size)` callable. None for inputs that cannot be read back
+        at arbitrary offsets, e.g. non-seekable streams.
+    """
+    if isinstance(obj, (bytes, bytearray)):
+        return _memory_reader(obj)
+
+    if isinstance(obj, memoryview):
+        return _memory_reader(obj.tobytes())
+
+    if isinstance(obj, (str, pathlib.PurePath)):
+        return _path_reader(obj)
+
+    if hasattr(obj, "read") and hasattr(obj, "seek") and hasattr(obj, "tell"):
+        return _stream_reader(obj)
+
+    return None
+
+
+def _memory_reader(data: bytes | bytearray) -> ReadAt:
+    def read_at(offset: int, size: int) -> bytes | bytearray:
+        if offset < 0 or size <= 0:
+            return b""
+        return data[offset : offset + size]
+
+    return read_at
+
+
+def _path_reader(path: str | pathlib.PurePath) -> ReadAt:
+    def read_at(offset: int, size: int) -> bytes | bytearray:
+        if offset < 0 or size <= 0:
+            return b""
+        with open(path, "rb") as fp:  # noqa: PTH123
+            fp.seek(offset)
+            return fp.read(size)
+
+    return read_at
+
+
+def _stream_reader(stream: IO[bytes]) -> ReadAt:
+    def read_at(offset: int, size: int) -> bytes | bytearray:
+        if offset < 0 or size <= 0:
+            return b""
+        start_pos = stream.tell()
+        try:
+            stream.seek(offset)
+            return stream.read(size)
+        finally:
+            stream.seek(start_pos)
+
+    return read_at

@@ -25,7 +25,7 @@ from sigtype.match import (
     match,
     video_match,
 )
-from sigtype.utils import SIGNATURE_SIZE
+from sigtype.utils import SIGNATURE_SIZE, ReadAt
 
 __version__ = "0.1.0"
 version = __version__
@@ -33,6 +33,7 @@ version = __version__
 
 __all__ = [
     "SIGNATURE_SIZE",
+    "ReadAt",
     "add_type",
     "application_match",
     "archive_match",

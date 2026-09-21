@@ -1,9 +1,18 @@
+from typing import ClassVar
+
+from sigtype.utils import ReadAt
+
+
 class Type:
     """Represents the file type object.
 
     Inherited by specific file type matchers. Provides convenient
     accessor and helper methods.
     """
+
+    # Set to True by matchers that need to look past the first SIGNATURE_SIZE bytes. Such matchers
+    # are invoked through `match_at()` and receive a random access reader.
+    needs_read_at: ClassVar[bool] = False
 
     def __init__(self, mime: str, extension: str) -> None:
         """Initialize with the MIME type and file extension it matches."""
@@ -31,3 +40,16 @@ class Type:
     def match(self, buf: bytes | bytearray) -> bool:
         """Check whether the given buffer matches this type's signature."""
         raise NotImplementedError
+
+    def match_at(self, buf: bytes | bytearray, read_at: ReadAt | None) -> bool:  # noqa: ARG002
+        """Check whether the input matches, optionally reading past the signature bytes.
+
+        Args:
+            buf: the first SIGNATURE_SIZE bytes of the input.
+            read_at: random access reader for the whole input, or None when unavailable.
+                Matchers must fail gracefully (or fall back to `buf`) when it is None.
+
+        Returns:
+            True if the input matches this type's signature.
+        """
+        return self.match(buf)

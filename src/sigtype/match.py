@@ -11,15 +11,18 @@ from sigtype.types import (
     VIDEO,
 )
 from sigtype.types.base import Type
-from sigtype.utils import ReadableInput, get_bytes
+from sigtype.utils import ReadableInput, ReadAt, get_bytes, make_reader
 
 
-def match(obj: ReadableInput, matchers: Sequence[Type] = TYPES) -> Type | None:
+def match(obj: ReadableInput, matchers: Sequence[Type] = TYPES, *, read_at: ReadAt | None = None) -> Type | None:
     """Match the given input against the available file type matchers.
 
     Args:
         obj: path to file, bytes or bytearray.
         matchers: sequence of type matchers to check against.
+        read_at: optional `read_at(offset, size)` callable giving random access to the input, used by
+            matchers that need data beyond the first SIGNATURE_SIZE bytes. Built automatically for paths,
+            in-memory buffers and seekable streams. Pass it for other sources, e.g. ranged HTTP requests.
 
     Returns:
         Type instance if type matches. Otherwise None.
@@ -28,9 +31,17 @@ def match(obj: ReadableInput, matchers: Sequence[Type] = TYPES) -> Type | None:
         TypeError: if obj is not a supported type.
     """
     buf = get_bytes(obj)
+    reader = read_at
+    reader_resolved = read_at is not None
 
     for matcher in matchers:
-        if matcher.match(buf):
+        if matcher.needs_read_at:
+            if not reader_resolved:
+                reader = make_reader(obj)
+                reader_resolved = True
+            if matcher.match_at(buf, reader):
+                return matcher
+        elif matcher.match(buf):
             return matcher
 
     return None
