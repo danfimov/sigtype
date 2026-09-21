@@ -370,3 +370,73 @@ class TestOleDocuments:
             assert sigtype.guess_extension(FIXTURES + "/" + name) == ext
             data = Path(FIXTURES + "/" + name).read_bytes()
             assert read_root_entry_names(data, None) is not None
+
+
+class TestTextBasedTypes:
+    SVG = b'<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10"/></svg>'
+
+    def test_svg(self):
+        kind = sigtype.guess(self.SVG)
+        assert kind is not None
+        assert (kind.mime, kind.extension) == ("image/svg+xml", "svg")
+        assert sigtype.is_image(self.SVG)
+
+    def test_svg_with_prolog(self):
+        buf = (
+            b'\xef\xbb\xbf\n<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n'
+            b"<!-- Created with an editor -->\n"
+            b'<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">\n'
+            b'<svg xmlns="http://www.w3.org/2000/svg"></svg>'
+        )
+        assert sigtype.guess_extension(buf) == "svg"
+
+    def test_svg_with_internal_subset(self):
+        buf = b'<?xml version="1.0"?><!DOCTYPE svg [ <!ENTITY ns "http://www.w3.org/2000/svg"> ]>\n<svg xmlns="&ns;"/>'
+        assert sigtype.guess_extension(buf) == "svg"
+
+    def test_other_xml_is_not_svg(self):
+        assert sigtype.guess_extension(b'<?xml version="1.0"?><html><svg></svg></html>') is None
+        assert sigtype.guess_extension(b"<svgfoo></svgfoo>") is None
+        assert sigtype.guess_extension(b"just <svg> mentioned in text") is None
+
+    def test_svg_path(self, tmp_path):
+        path = tmp_path / "logo.svg"
+        path.write_bytes(self.SVG)
+        assert sigtype.guess_mime(str(path)) == "image/svg+xml"
+
+    def test_fb2(self):
+        buf = (
+            b'<?xml version="1.0" encoding="utf-8"?>\n<FictionBook xmlns="http://www.gribuser.ru/xml/fictionbook/2.0">'
+        )
+        kind = sigtype.guess(buf)
+        assert kind is not None
+        assert (kind.mime, kind.extension) == ("application/x-fictionbook+xml", "fb2")
+
+    def test_eml(self):
+        buf = (
+            b"Received: from mail.example.com (mail.example.com [192.0.2.1])\r\n"
+            b"\tby mx.example.org with ESMTP id abc123\r\n"
+            b"From: Alice <alice@example.com>\r\n"
+            b"To: Bob <bob@example.org>\r\n"
+            b"Subject: Hello\r\n"
+            b"Date: Mon, 21 Sep 2026 10:00:00 +0000\r\n"
+            b"\r\n"
+            b"Body with \xff\xfe bytes\r\n"
+        )
+        kind = sigtype.guess(buf)
+        assert kind is not None
+        assert (kind.mime, kind.extension) == ("message/rfc822", "eml")
+
+    def test_eml_cut_mid_line_by_signature_window(self):
+        buf = b"From: a@example.com\nTo: b@example.org\nSubject: a long subje"
+        assert sigtype.guess_extension(buf) == "eml"
+
+    def test_headers_alone_are_not_enough_for_eml(self):
+        assert sigtype.guess_extension(b"Content-Type: text/plain\nContent-Length: 5\n\nhello") is None
+        assert sigtype.guess_extension(b"Subject: only one known header\nX-Custom: 1\n\nhello") is None
+
+    def test_prose_is_not_eml(self):
+        assert sigtype.guess_extension(b"From: the beginning\nthis is just prose\nTo: nobody\n") is None
+
+    def test_binary_is_not_eml(self):
+        assert sigtype.guess_extension(b"From:\x00\x01\x02To:\x00\x00Subject:\x00") is None

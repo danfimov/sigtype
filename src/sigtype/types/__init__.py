@@ -1,6 +1,6 @@
 from typing import Final
 
-from sigtype.types import application, archive, audio, document, font, image, video
+from sigtype.types import application, archive, audio, document, font, image, text, video
 from sigtype.types.base import Type
 
 # Supported image types
@@ -25,6 +25,7 @@ IMAGE: Final = (
     image.Avif(),
     image.Qoi(),
     image.Dds(),
+    text.Svg(),
 )
 
 # Supported video types
@@ -104,6 +105,8 @@ DOCUMENT: Final = (
     document.Xlsx(),
     document.Ods(),
     document.Msg(),
+    text.Fb2(),
+    text.Eml(),
 )
 
 

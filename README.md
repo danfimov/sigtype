@@ -136,10 +136,10 @@ print(kind)  # "application/foo"
 
 ## Supported types
 
-- **Image**: jpg, jpx, jxl, apng, png, gif, webp, tiff, cr2, bmp, jxr, psd, ico, heic, dcm, avif, qoi, dds, dwg, xcf
+- **Image**: jpg, jpx, jxl, apng, png, gif, webp, tiff, cr2, bmp, jxr, psd, ico, heic, dcm, avif, qoi, dds, dwg, xcf, svg
 - **Video**: mp4, m4v, mkv, webm, mov, avi, wmv, mpg, flv, m3gp
 - **Audio**: aac, mid, mp3, m4a, ogg, flac, wav, amr, aiff
 - **Archive**: br, rpm, dcm, epub, zip, tar, rar, gz, bz2, 7z, pdf, exe, swf, rtf, nes, crx, cab, eot, ps, xz, sqlite, deb, ar, z, lzop, lz, elf, lz4, zst
 - **Font**: woff, woff2, ttf, otf
-- **Document**: doc, docx, odt, xls, xlsx, ods, ppt, pptx, odp, msg
+- **Document**: doc, docx, odt, xls, xlsx, ods, ppt, pptx, odp, msg, fb2, eml
 - **Application**: wasm
