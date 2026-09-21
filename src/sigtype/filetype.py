@@ -4,9 +4,6 @@ from sigtype.match import match
 from sigtype.types import TYPES, Type
 from sigtype.utils import ReadableInput
 
-# Expose supported matchers types
-types = TYPES
-
 
 def guess(obj: ReadableInput) -> Type | None:
     """Infer the type of the given input.
@@ -68,7 +65,7 @@ def get_type(mime: str | None = None, ext: str | None = None) -> Type | None:
     Returns:
         The matched file type instance. Otherwise None.
     """
-    for kind in types:
+    for kind in TYPES:
         if kind.extension == ext or kind.mime == mime:
             return kind
     return None
@@ -87,4 +84,4 @@ def add_type(instance: Any) -> None:  # noqa: ANN401
         msg = "instance must inherit from sigtype.types.Type"
         raise TypeError(msg)
 
-    types.insert(0, instance)
+    TYPES.insert(0, instance)
