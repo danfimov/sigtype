@@ -1,0 +1,114 @@
+[project]
+name = "file_type"
+description = "Package to infer binary file types checking the magic numbers signature"
+readme = "README.md"
+authors = [
+    { name = "Dmitry Anfimov", email = "lovesolaristics@gmail.com" }
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Web Environment",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+]
+dynamic = ["version"]
+requires-python = ">=3.11"
+dependencies = []
+
+[project.urls]
+Documentation = "https://github.com/danfimov/file-type"
+Repository = "https://github.com/danfimov/file-type"
+Changelog = "https://github.com/danfimov/file-type/releases"
+
+
+[dependency-groups]
+dev = [
+    { include-group = "test" },
+    { include-group = "lint" },
+    { include-group = "types" },
+    "prek>=0.5.3",
+]
+test = [
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+    "pytest-codspeed>=5.0.3",
+]
+lint = [
+    "ruff>=0.16.8",
+    "zizmor>=1.30.1",
+]
+types = [
+    "mypy>=2.3.1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/file_type/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/file_type"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "src/file_type",
+  "README.md",
+  "LICENSE",
+]
+
+[tool.ruff]
+line-length = 120
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "ALL",
+]
+ignore = [
+    "CPY",
+    "D203",  # conflicting with D211
+    "D213",  # conflicting with D212
+    "D413",
+    "D100",
+    "D104",
+    "COM812",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+    "D",
+    "ANN",
+    "PLR2004",
+    "S101",
+    "INP001",  # test directories are not import packages
+]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"unittest.TestCase".msg = "Use pytest-style tests."
+"django.test.TestCase".msg = "Use pytest-style tests."
+"__future__.annotations".msg = "Use normal type annotation. Use string type annotations only in a targeted manner."
+
+[tool.mypy]
+strict = true
+disallow_any_generics = false
+warn_unreachable = true
+enable_error_code = [
+    "explicit-override",
+    "ignore-without-code",
+    "redundant-expr",
+    "truthy-bool",
+    "truthy-iterable",
+    "possibly-undefined",
+    "mutable-override",
+    "redundant-self",
+    "deprecated",
+]
