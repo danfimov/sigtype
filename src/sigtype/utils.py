@@ -1,6 +1,6 @@
 import pathlib
 from pathlib import Path
-from typing import IO, Final, TypeVar
+from typing import IO, Final, TypeVar, cast
 
 _NUM_SIGNATURE_BYTES: Final = 8192
 
@@ -20,7 +20,7 @@ def get_signature_bytes(path: str | pathlib.PurePath) -> bytearray:
     Returns:
         First 8192 bytes of the file content as bytearray type.
     """
-    with Path(path).open("rb") as fp:
+    with open(path, "rb") as fp:  # noqa: PTH123
         return bytearray(fp.read(_NUM_SIGNATURE_BYTES))
 
 
@@ -38,7 +38,9 @@ def signature(array: _Buffer) -> _Buffer:
     length = len(array)
     index = min(length, _NUM_SIGNATURE_BYTES)
 
-    return array[:index]
+    # mypyc's per-specialization type checking cannot verify that slicing preserves the concrete buffer type across this
+    # constrained TypeVar (regular mypy infers it fine, hence warn_redundant_casts is disabled for this module below).
+    return cast("_Buffer", array[:index])
 
 
 def get_bytes(obj: ReadableInput) -> bytes | bytearray:
