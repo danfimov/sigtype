@@ -8,11 +8,13 @@ from sigtype.filetype import (
 from sigtype.helpers import (
     is_archive,
     is_audio,
+    is_binary,
     is_document,
     is_extension_supported,
     is_font,
     is_image,
     is_mime_supported,
+    is_text,
     is_video,
 )
 from sigtype.match import (
@@ -47,11 +49,13 @@ __all__ = [
     "image_match",
     "is_archive",
     "is_audio",
+    "is_binary",
     "is_document",
     "is_extension_supported",
     "is_font",
     "is_image",
     "is_mime_supported",
+    "is_text",
     "is_video",
     "match",
     "video_match",

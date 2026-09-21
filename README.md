@@ -68,6 +68,17 @@ sigtype.is_font("sample.ttf")  # True
 sigtype.is_document("sample.docx")  # True
 ```
 
+To tell text from binary data (no magic number exists for plain text), use `is_text()` and `is_binary()`.
+They look at the first 8192 bytes: text is UTF-8 (or UTF-16/UTF-32 with a BOM) without NUL bytes and
+control characters other than whitespace.
+
+```python
+import sigtype
+
+sigtype.is_text("notes.txt")  # True
+sigtype.is_binary("sample.jpg")  # True
+```
+
 You can also check whether a MIME type or an extension is supported at all:
 
 ```python

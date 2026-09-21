@@ -203,3 +203,46 @@ class TestReadAt:
     def test_truncated_flac_is_not_matched(self):
         data = _flac_with_big_id3()[:15000]
         assert sigtype.guess_mime(data) == "audio/mpeg"
+
+
+class TestTextDetection:
+    def test_ascii_and_utf8(self):
+        assert sigtype.is_text(b"plain text\nwith\twhitespace\r\n")
+        assert sigtype.is_text("Привет, мир! 你好 🙂".encode())
+        assert sigtype.is_text(b"\xef\xbb\xbfwith a BOM")
+
+    def test_ansi_escape_sequences_are_text(self):
+        assert sigtype.is_text(b"\x1b[31mred\x1b[0m\n")
+
+    def test_utf16_and_utf32_with_bom(self):
+        assert sigtype.is_text("hello".encode("utf-16"))
+        assert sigtype.is_text("hello".encode("utf-32"))
+        assert sigtype.is_text(b"\xfe\xff" + "привет".encode("utf-16-be"))
+
+    def test_binary(self):
+        assert sigtype.is_binary(b"\x00\x01\x02\x03")
+        assert sigtype.is_binary(b"text with a NUL\x00 inside")
+        assert sigtype.is_binary(b"\x01text starting with control")
+        assert sigtype.is_binary(b"\xff\xd8\xff\xe0\x00\x10JFIF")
+        assert sigtype.is_binary(b"caf\xe9 is not valid utf-8")
+
+    def test_empty_is_text(self):
+        assert sigtype.is_text(b"")
+        assert not sigtype.is_binary(b"")
+
+    def test_known_binary_files(self):
+        for name in ("sample.jpg", "sample.zip", "sample.doc", "sample.mp4"):
+            assert sigtype.is_binary(FIXTURES + "/" + name)
+
+    def test_multibyte_character_cut_by_signature_window(self):
+        data = ("a" * (sigtype.SIGNATURE_SIZE - 1) + "я" + "b" * 100).encode()
+        assert sigtype.is_text(data)
+        # the same cut is an error when it is the whole input
+        assert sigtype.is_binary(("a" * 10 + "я").encode()[:-1])
+
+    def test_path_and_stream(self, tmp_path):
+        path = tmp_path / "note.txt"
+        path.write_text("just a note\n")
+        assert sigtype.is_text(str(path))
+        assert sigtype.is_text(path)
+        assert sigtype.is_text(io.BytesIO(b"just a note\n"))
