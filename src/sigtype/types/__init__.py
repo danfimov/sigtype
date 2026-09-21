@@ -3,6 +3,12 @@ from typing import Final
 from sigtype.types import application, archive, audio, document, font, image, text, video
 from sigtype.types.base import Type
 
+# Text based formats are recognized by parsing their content, which costs more than comparing a signature.
+# They are members of their families (so is_image() and is_document() know them) but are tried last by guess().
+_SVG: Final = text.Svg()
+_FB2: Final = text.Fb2()
+_EML: Final = text.Eml()
+
 # Supported image types
 IMAGE: Final = (
     image.Dwg(),
@@ -25,7 +31,7 @@ IMAGE: Final = (
     image.Avif(),
     image.Qoi(),
     image.Dds(),
-    text.Svg(),
+    _SVG,
 )
 
 # Supported video types
@@ -109,8 +115,8 @@ DOCUMENT: Final = (
     document.Ofd(),
     document.Mobi(),
     document.Djvu(),
-    text.Fb2(),
-    text.Eml(),
+    _FB2,
+    _EML,
 )
 
 # Plain text matchers. Not part of TYPES, since any text file would match them and guess() would stop returning
@@ -118,7 +124,11 @@ DOCUMENT: Final = (
 PLAIN_TEXT: Final = (text.Md(), text.Txt())
 
 # Expose supported type matchers
-TYPES: Final = list(IMAGE + AUDIO + VIDEO + FONT + DOCUMENT + ARCHIVE + APPLICATION)
+_TEXT_BASED: Final[tuple[Type, ...]] = (_SVG, _FB2, _EML)
+TYPES: Final[list[Type]] = [
+    *(kind for kind in (*IMAGE, *AUDIO, *VIDEO, *FONT, *DOCUMENT, *ARCHIVE, *APPLICATION) if kind not in _TEXT_BASED),
+    *_TEXT_BASED,
+]
 
 __all__ = [
     "APPLICATION",

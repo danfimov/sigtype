@@ -713,6 +713,30 @@ class TestZipEntryMatchers:
         assert not sigtype.types.document.Docx().match(b"not a zip at all")
 
 
+class TestMatcherOrder:
+    def test_text_based_matchers_are_tried_last(self):
+        tail = [type(kind).__name__ for kind in sigtype.types.TYPES[-3:]]
+        assert tail == ["Svg", "Fb2", "Eml"]
+
+    def test_text_based_matchers_stay_in_their_families(self):
+        assert any(isinstance(kind, sigtype.types.text.Svg) for kind in sigtype.types.IMAGE)
+        assert any(isinstance(kind, sigtype.types.text.Fb2) for kind in sigtype.types.DOCUMENT)
+        assert any(isinstance(kind, sigtype.types.text.Eml) for kind in sigtype.types.DOCUMENT)
+
+    def test_every_matcher_is_listed_once(self):
+        families = [
+            *sigtype.types.IMAGE,
+            *sigtype.types.AUDIO,
+            *sigtype.types.VIDEO,
+            *sigtype.types.FONT,
+            *sigtype.types.DOCUMENT,
+            *sigtype.types.ARCHIVE,
+            *sigtype.types.APPLICATION,
+        ]
+        assert len(sigtype.types.TYPES) == len(families)
+        assert {id(kind) for kind in sigtype.types.TYPES} == {id(kind) for kind in families}
+
+
 class TestPdfHeaderPlacement:
     BODY = b"%PDF-1.4\n" + b"\x00" * 32
 
