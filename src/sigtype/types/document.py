@@ -3,6 +3,7 @@ from typing import Final
 from sigtype._compat import override
 from sigtype.types.base import Type
 
+_ZIP_LOCAL_FILE_HEADER: Final = b"PK\x03\x04"
 _ZIP_SEARCH_RANGE: Final = 6000
 _ZIP_SIGNATURE_LENGTH: Final = 4
 _MIMETYPE_ENTRY_OFFSET: Final = 0x1E
@@ -17,9 +18,7 @@ class ZippedDocumentBase(Type):
     @override
     def match(self, buf: bytes | bytearray) -> bool:
         """Match documents starting with a ZIP local file header signature."""
-        # start by checking for ZIP local file header signature
-        idx = self.search_signature(buf, 0, _ZIP_SEARCH_RANGE)
-        if idx != 0:
+        if not self.compare_bytes(buf, _ZIP_LOCAL_FILE_HEADER, 0):
             return False
 
         return self.match_document(buf)
@@ -49,7 +48,6 @@ class ZippedDocumentBase(Type):
         range_num: int,
     ) -> int:
         """Search for the ZIP local file header signature within a byte range."""
-        signature = b"PK\x03\x04"
         length = len(buf)
 
         end = start + range_num
@@ -59,7 +57,7 @@ class ZippedDocumentBase(Type):
             return -1
 
         try:
-            return buf.index(signature, start, end)
+            return buf.index(_ZIP_LOCAL_FILE_HEADER, start, end)
         except ValueError:
             return -1
 

@@ -5,15 +5,48 @@ on:
     tags:
       - v*
 
+permissions:
+  contents: read
+
+env:
+  CIBW_BUILD_VERBOSITY: 1
+
 jobs:
-  pypi:
-    name: Build and publish to PyPI
+  compiled-wheels:
+    name: Compiled wheels on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-14, windows-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: false
+          version: "latest"
+
+      - name: Set version from tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          sed -i.bak "s/^__version__ = .*/__version__ = \"${version}\"/" src/sigtype/__init__.py
+          rm -f src/sigtype/__init__.py.bak
+          echo "Building sigtype ${version} (compiled)"
+
+      - uses: pypa/cibuildwheel@e090b81e30c4d855ea63bf4b6e59204c09a101ae # v4.2.1
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: wheels-${{ matrix.os }}
+          path: wheelhouse/*.whl
+
+  sdist-and-pure-wheel:
+    name: sdist and pure-Python wheel
     runs-on: ubuntu-latest
-    environment:
-      name: release
-    permissions:
-      contents: read
-      id-token: write  # trusted publishing to PyPI
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -26,15 +59,46 @@ jobs:
 
       - name: Set version from tag
         run: |
+          set -euo pipefail
           version="${GITHUB_REF_NAME#v}"
           sed -i "s/^__version__ = .*/__version__ = \"${version}\"/" src/sigtype/__init__.py
-          echo "Building django-capo-s3 ${version}"
+          echo "Building sigtype ${version}"
 
-      - name: Build sdist and wheel
+      - name: Build
         run: |
           set -euxo pipefail
           uv build
           ls -l dist
+          ls dist/*-py3-none-any.whl
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sdist-and-pure-wheel
+          path: dist/*
+
+  publish:
+    name: Publish to PyPI
+    needs: [compiled-wheels, sdist-and-pure-wheel]
+    runs-on: ubuntu-latest
+    environment:
+      name: release
+    permissions:
+      contents: read
+      id-token: write # trusted publishing to PyPI
+    steps:
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: false
+          version: "latest"
+          python-version: "3.12"
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Show what is being published
+        run: ls -l dist
 
       - name: Publish
-        run: uv publish --trusted-publishing always
+        run: uv publish --trusted-publishing always dist/*
