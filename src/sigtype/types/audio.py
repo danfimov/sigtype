@@ -123,6 +123,9 @@ class Ogg(Type):
 
 _FLAC_MIN_LENGTH: Final = 3
 _FLAC_SIGNATURE: Final = (0x66, 0x4C, 0x61, 0x43)
+_ID3V2_SIGNATURE: Final = (0x49, 0x44, 0x33)
+_ID3V2_HEADER_SIZE: Final = 10
+_ID3V2_SIZE_OFFSET: Final = 6
 
 
 class Flac(Type):
@@ -137,14 +140,32 @@ class Flac(Type):
 
     @override
     def match(self, buf: bytes | bytearray) -> bool:
-        """Match the FLAC file signature."""
+        """Match the FLAC file signature, skipping a leading ID3v2 tag if present."""
+        offset = self._id3v2_tag_size(buf)
         return (
-            len(buf) > _FLAC_MIN_LENGTH
-            and buf[0] == _FLAC_SIGNATURE[0]
-            and buf[1] == _FLAC_SIGNATURE[1]
-            and buf[2] == _FLAC_SIGNATURE[2]
-            and buf[3] == _FLAC_SIGNATURE[3]
+            len(buf) > offset + _FLAC_MIN_LENGTH
+            and buf[offset] == _FLAC_SIGNATURE[0]
+            and buf[offset + 1] == _FLAC_SIGNATURE[1]
+            and buf[offset + 2] == _FLAC_SIGNATURE[2]
+            and buf[offset + 3] == _FLAC_SIGNATURE[3]
         )
+
+    @staticmethod
+    def _id3v2_tag_size(buf: bytes | bytearray) -> int:
+        """Return the byte size of a leading ID3v2 tag, or 0 if none is present."""
+        if (
+            len(buf) < _ID3V2_HEADER_SIZE
+            or buf[0] != _ID3V2_SIGNATURE[0]
+            or buf[1] != _ID3V2_SIGNATURE[1]
+            or buf[2] != _ID3V2_SIGNATURE[2]
+        ):
+            return 0
+
+        # ID3v2 tag size is a 4-byte syncsafe integer: only the low 7 bits of each byte are significant.
+        size = 0
+        for byte in buf[_ID3V2_SIZE_OFFSET : _ID3V2_SIZE_OFFSET + 4]:
+            size = (size << 7) | (byte & 0x7F)
+        return _ID3V2_HEADER_SIZE + size
 
 
 _WAV_MIN_LENGTH: Final = 11

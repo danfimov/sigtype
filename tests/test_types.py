@@ -65,6 +65,37 @@ class TestFileType:
         assert kind.mime == "audio/mp4"
         assert kind.extension == "m4a"
 
+    @staticmethod
+    def _build_id3v2_tag(body_length: int) -> bytes:
+        size_bytes = bytes([(body_length >> (7 * i)) & 0x7F for i in (3, 2, 1, 0)])
+        return b"ID3" + b"\x03\x00\x00" + size_bytes + b"\x00" * body_length
+
+    def test_guess_flac(self):
+        kind = sigtype.guess(b"fLaC" + b"\x00" * 20)
+        assert kind is not None
+        assert kind.mime == "audio/x-flac"
+        assert kind.extension == "flac"
+
+    def test_guess_mp3(self):
+        kind = sigtype.guess(b"\xff\xfb\x90\x00" + b"\x00" * 20)
+        assert kind is not None
+        assert kind.mime == "audio/mpeg"
+        assert kind.extension == "mp3"
+
+    def test_guess_flac_with_leading_id3v2_tag(self):
+        buf = self._build_id3v2_tag(20) + b"fLaC" + b"\x00" * 20
+        kind = sigtype.guess(buf)
+        assert kind is not None
+        assert kind.mime == "audio/x-flac"
+        assert kind.extension == "flac"
+
+    def test_guess_mp3_with_id3v2_tag_still_detected_as_mp3(self):
+        buf = self._build_id3v2_tag(20) + b"\xff\xfb\x90\x00" + b"\x00" * 20
+        kind = sigtype.guess(buf)
+        assert kind is not None
+        assert kind.mime == "audio/mpeg"
+        assert kind.extension == "mp3"
+
     def test_guess_mp4(self):
         kind = sigtype.guess(FIXTURES + "/sample.mp4")
         assert kind is not None
