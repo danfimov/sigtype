@@ -522,24 +522,6 @@ class Br(Type):
         return buf[:4] == Br.SIGNATURE
 
 
-class Dcm(Type):
-    """Implements the Dcm image type matcher."""
-
-    MIME: Final[str] = "application/dicom"
-    EXTENSION: Final[str] = "dcm"
-
-    SIGNATURE: Final = bytearray([0x44, 0x49, 0x43, 0x4D])
-
-    def __init__(self) -> None:
-        """Initialize the Dcm matcher."""
-        super().__init__(mime=Dcm.MIME, extension=Dcm.EXTENSION)
-
-    @override
-    def match(self, buf: bytes | bytearray) -> bool:
-        """Check whether the buffer contains the Dcm signature."""
-        return buf[128:131] == Dcm.SIGNATURE
-
-
 class Rpm(Type):
     """Implements the Rpm image type matcher."""
 
