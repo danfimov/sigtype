@@ -76,9 +76,9 @@ class Mkv(Type):
     @override
     def match(self, buf: bytes | bytearray) -> bool:
         """Match the MKV file signature."""
-        contains_ebml_element = buf.startswith(b"\x1a\x45\xdf\xa3")
-        contains_doctype_element = buf.find(b"\x42\x82\x88matroska") > -1
-        return contains_ebml_element and contains_doctype_element
+        # Check the cheap EBML header first: searching the whole buffer for the doctype is far more expensive
+        # and would otherwise run for every input that reaches this matcher.
+        return buf.startswith(b"\x1a\x45\xdf\xa3") and buf.find(b"\x42\x82\x88matroska") > -1
 
 
 class Webm(Type):
@@ -94,9 +94,7 @@ class Webm(Type):
     @override
     def match(self, buf: bytes | bytearray) -> bool:
         """Match the WebM file signature."""
-        contains_ebml_element = buf.startswith(b"\x1a\x45\xdf\xa3")
-        contains_doctype_element = buf.find(b"\x42\x82\x84webm") > -1
-        return contains_ebml_element and contains_doctype_element
+        return buf.startswith(b"\x1a\x45\xdf\xa3") and buf.find(b"\x42\x82\x84webm") > -1
 
 
 class Mov(IsoBmff):

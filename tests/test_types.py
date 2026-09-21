@@ -598,3 +598,27 @@ class TestOpus:
     def test_truncated_ogg_page(self):
         assert sigtype.guess_extension(b"OggS\x00\x02" + b"\x00" * 20) == "ogg"
         assert sigtype.guess_extension(b"OggS\x00\x02" + b"\x00" * 20 + b"\xff") == "ogg"
+
+
+class TestMatroska:
+    EBML = b"\x1a\x45\xdf\xa3"
+
+    def _doc(self, doctype: bytes) -> bytes:
+        return self.EBML + b"\x9f\x42\x86\x81\x01" + b"\x42\x82" + bytes([0x80 | len(doctype)]) + doctype + b"\x00" * 64
+
+    def test_mkv(self):
+        kind = sigtype.guess(self._doc(b"matroska"))
+        assert kind is not None
+        assert (kind.mime, kind.extension) == ("video/x-matroska", "mkv")
+
+    def test_webm(self):
+        kind = sigtype.guess(self._doc(b"webm"))
+        assert kind is not None
+        assert (kind.mime, kind.extension) == ("video/webm", "webm")
+
+    def test_doctype_without_ebml_header_is_ignored(self):
+        assert sigtype.guess_extension(b"\x00" * 16 + self._doc(b"matroska")) is None
+        assert sigtype.guess_extension(b"\x00" * 16 + self._doc(b"webm")) is None
+
+    def test_ebml_header_with_another_doctype(self):
+        assert sigtype.guess_extension(self._doc(b"other")) is None
