@@ -100,6 +100,35 @@ _OGG_MIN_LENGTH: Final = 3
 _OGG_SIGNATURE: Final = (0x4F, 0x67, 0x67, 0x53)
 
 
+_OGG_SEGMENT_COUNT_OFFSET: Final = 26
+_OGG_SEGMENT_TABLE_OFFSET: Final = 27
+_OPUS_HEAD: Final = b"OpusHead"
+
+
+class Opus(Type):
+    """Implements the Opus audio type matcher (Opus in an Ogg container)."""
+
+    MIME: Final[str] = "audio/opus"
+    EXTENSION: Final[str] = "opus"
+
+    def __init__(self) -> None:
+        """Initialize the Opus matcher."""
+        super().__init__(mime=Opus.MIME, extension=Opus.EXTENSION)
+
+    @override
+    def match(self, buf: bytes | bytearray) -> bool:
+        """Match an Ogg stream whose first packet is the Opus identification header.
+
+        Must be checked before `Ogg`, which matches every Ogg stream.
+        """
+        if len(buf) <= _OGG_SEGMENT_COUNT_OFFSET or tuple(buf[:4]) != _OGG_SIGNATURE:
+            return False
+
+        # The first packet starts right after the segment table of the first page.
+        packet = _OGG_SEGMENT_TABLE_OFFSET + buf[_OGG_SEGMENT_COUNT_OFFSET]
+        return buf[packet : packet + len(_OPUS_HEAD)] == _OPUS_HEAD
+
+
 class Ogg(Type):
     """Implements the OGG audio type matcher."""
 

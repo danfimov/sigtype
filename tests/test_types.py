@@ -537,3 +537,30 @@ class TestEbooks:
 
     def test_iff_form_that_is_not_djvu(self):
         assert sigtype.guess_extension(b"AT&TFORM\x00\x00\x12\x34DJVX" + b"\x00" * 100) is None
+
+
+class TestOpus:
+    @staticmethod
+    def _ogg_page(first_packet: bytes, segments: int = 1) -> bytes:
+        header = b"OggS\x00\x02" + b"\x00" * 20 + bytes([segments])
+        table = bytes([len(first_packet)]) + b"\x00" * (segments - 1)
+        return header + table + first_packet
+
+    def test_opus(self):
+        data = self._ogg_page(b"OpusHead\x01\x02\x38\x01\x80\xbb\x00\x00\x00\x00\x00")
+        kind = sigtype.guess(data)
+        assert kind is not None
+        assert (kind.mime, kind.extension) == ("audio/opus", "opus")
+        assert sigtype.is_audio(data)
+
+    def test_opus_with_several_segments(self):
+        assert sigtype.guess_extension(self._ogg_page(b"OpusHead\x01\x02", segments=3)) == "opus"
+
+    def test_vorbis_stays_ogg(self):
+        kind = sigtype.guess(self._ogg_page(b"\x01vorbis\x00\x00\x00\x00\x02"))
+        assert kind is not None
+        assert (kind.mime, kind.extension) == ("audio/ogg", "ogg")
+
+    def test_truncated_ogg_page(self):
+        assert sigtype.guess_extension(b"OggS\x00\x02" + b"\x00" * 20) == "ogg"
+        assert sigtype.guess_extension(b"OggS\x00\x02" + b"\x00" * 20 + b"\xff") == "ogg"

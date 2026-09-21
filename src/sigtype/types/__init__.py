@@ -49,6 +49,7 @@ AUDIO: Final = (
     audio.Flac(),
     audio.Mp3(),
     audio.M4a(),
+    audio.Opus(),
     audio.Ogg(),
     audio.Wav(),
     audio.Amr(),
