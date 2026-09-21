@@ -330,3 +330,32 @@ class TestPathInput:
             assert not any(
                 str(path) == str(link.resolve()) for link in Path("/proc/self/fd").iterdir() if link.exists()
             )
+
+
+class TestReadAtFlag:
+    @SUBCLASSING_UNSUPPORTED
+    def test_class_level_flag_is_honoured_by_custom_matchers(self):
+        seen = []
+
+        class NeedsMore(sigtype.types.Type):
+            needs_read_at = True
+
+            def __init__(self) -> None:
+                super().__init__(mime="application/needs-more", extension="nm")
+
+            def match_at(self, _buf, read_at):
+                seen.append(read_at is not None)
+                return read_at is not None and read_at(0, 2) == b"NM"
+
+        class Plain(sigtype.types.Type):
+            def __init__(self) -> None:
+                super().__init__(mime="application/plain", extension="pl")
+
+            def match(self, buf):
+                return buf[:2] == b"PL"
+
+        assert NeedsMore().uses_read_at
+        assert not Plain().uses_read_at
+        assert sigtype.match(b"NM....", [Plain(), NeedsMore()]).extension == "nm"
+        assert sigtype.match(b"PL....", [NeedsMore(), Plain()]).extension == "pl"
+        assert seen == [True, True]
