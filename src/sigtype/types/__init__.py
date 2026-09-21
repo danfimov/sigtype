@@ -97,10 +97,6 @@ DOCUMENT: Final = (
     document.Doc(),
     document.Docx(),
     document.Odt(),
-    # Ppt and Xls share the same OLE primary signature at offset 512
-    # (FD FF FF FF) and only differ by a weak secondary check, so Ppt's
-    # more specific secondary check must be tried first to avoid
-    # misidentifying legacy .ppt files as .xls.
     document.Ppt(),
     document.Pptx(),
     document.Odp(),
