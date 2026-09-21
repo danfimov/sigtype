@@ -3,6 +3,12 @@ import zipfile
 from pathlib import Path
 
 import sigtype
+import sigtype.types
+import sigtype.types.document
+import sigtype.types.text
+from sigtype.types.cfb import read_root_entry_names
+
+from .cfb_builder import build_cfb
 
 # Absolute path to fixtures directory
 FIXTURES = str(Path(__file__).resolve().parent / "fixtures")
@@ -230,3 +236,516 @@ class TestFileType:
         assert kind is not None
         assert kind.mime == "application/vnd.oasis.opendocument.presentation"
         assert kind.extension == "odp"
+
+
+class TestFontMime:
+    """Font MIME types follow RFC 8081, which deprecated the `application/font-*` aliases."""
+
+    def test_woff(self):
+        kind = sigtype.guess(b"wOFF\x00\x01\x00\x00" + b"\x00" * 16)
+        assert kind is not None
+        assert (kind.mime, kind.extension) == ("font/woff", "woff")
+
+    def test_woff2(self):
+        kind = sigtype.guess(b"wOF2\x00\x01\x00\x00" + b"\x00" * 16)
+        assert kind is not None
+        assert (kind.mime, kind.extension) == ("font/woff2", "woff2")
+
+    def test_ttf(self):
+        kind = sigtype.guess(b"\x00\x01\x00\x00\x00" + b"\x00" * 16)
+        assert kind is not None
+        assert (kind.mime, kind.extension) == ("font/ttf", "ttf")
+
+    def test_otf(self):
+        kind = sigtype.guess(b"OTTO\x00" + b"\x00" * 16)
+        assert kind is not None
+        assert (kind.mime, kind.extension) == ("font/otf", "otf")
+
+    def test_mimes_are_unique(self):
+        mimes = [kind.mime for kind in sigtype.types.FONT]
+        assert len(mimes) == len(set(mimes))
+
+    def test_is_font(self):
+        assert sigtype.is_font(b"OTTO\x00" + b"\x00" * 16)
+
+    def test_deprecated_mime_aliases_still_resolve(self):
+        woff = sigtype.get_type(mime="application/font-woff")
+        assert woff is not None
+        assert woff.extension == "woff"
+        assert woff.mime == "font/woff"
+
+        sfnt = sigtype.get_type(mime="application/font-sfnt")
+        assert sfnt is not None
+        assert sfnt.mime in ("font/ttf", "font/otf")
+
+        assert sigtype.is_mime_supported("application/font-woff")
+        assert sigtype.is_mime_supported("application/font-sfnt")
+        assert sigtype.is_mime_supported("font/woff2")
+
+    def test_is_mime_accepts_aliases_but_guess_returns_the_canonical_one(self):
+        kind = sigtype.guess(b"wOFF\x00\x01\x00\x00" + b"\x00" * 16)
+        assert kind is not None
+        assert kind.is_mime("font/woff")
+        assert kind.is_mime("application/font-woff")
+        assert not kind.is_mime("application/font-sfnt")
+        assert kind.mime == "font/woff"
+        assert kind.aliases == ("application/font-woff",)
+
+    def test_woff2_does_not_claim_the_woff_alias(self):
+        kind = sigtype.guess(b"wOF2\x00\x01\x00\x00" + b"\x00" * 16)
+        assert kind is not None
+        assert not kind.is_mime("application/font-woff")
+
+    def test_types_without_aliases(self):
+        kind = sigtype.guess(FIXTURES + "/sample.jpg")
+        assert kind is not None
+        assert kind.aliases == ()
+        assert sigtype.get_type(mime="no/such-type") is None
+
+
+class TestPdfWithLeadingJunk:
+    BODY = b"%PDF-1.7\n%\xe2\xe3\xcf\xd3\n1 0 obj\n" + b"\x00" * 64
+
+    def test_plain(self):
+        assert sigtype.guess_mime(self.BODY) == "application/pdf"
+
+    def test_file_name_before_header(self):
+        assert sigtype.guess_mime(b"firmas_t/1082774737.png" + self.BODY) == "application/pdf"
+
+    def test_html_before_header(self):
+        buf = b'<html><head><meta http-equiv="refresh" content="0;url=http://dns"></head></html>\n' + self.BODY
+        assert sigtype.guess_mime(buf) == "application/pdf"
+
+    def test_leading_newline(self):
+        assert sigtype.guess_mime(b"\n" + self.BODY) == "application/pdf"
+
+    def test_header_beyond_search_range_is_ignored(self):
+        assert sigtype.guess_mime(b"\x01" * 1024 + self.BODY) is None
+
+    def test_mention_without_version_is_ignored(self):
+        assert sigtype.guess_mime(b"\x01\x02 see %PDF- spec \x03" + b"\x00" * 32) is None
+
+
+class TestOleDocuments:
+    """OLE2 formats are told apart by the streams in the container directory, not by byte offsets."""
+
+    PPT_STREAMS = ("PowerPoint Document", "Current User", "\x05SummaryInformation", "\x05DocumentSummaryInformation")
+
+    @staticmethod
+    def _ext(data) -> str | None:
+        return sigtype.guess_extension(bytes(data))
+
+    def test_doc_xls_ppt_msg(self):
+        assert self._ext(build_cfb(["WordDocument", "1Table"])) == "doc"
+        assert self._ext(build_cfb(["Workbook"])) == "xls"
+        assert self._ext(build_cfb(["PowerPoint Document"])) == "ppt"
+        assert self._ext(build_cfb(["__properties_version1.0", ("__substg1.0_0037001F", [])])) == "msg"
+
+    def test_msg_mime(self):
+        kind = sigtype.guess(bytes(build_cfb(["__properties_version1.0"])))
+        assert kind is not None
+        assert kind.mime == "application/vnd.ms-outlook"
+
+    def test_excel_5_book_stream(self):
+        assert self._ext(build_cfb(["Book"])) == "xls"
+
+    def test_ppt_sharing_signature_with_xls_is_not_taken_for_xls(self):
+        # The FAT of this container starts with FD FF FF FF at offset 512, and the legacy Xls heuristic accepts
+        # it while the legacy Ppt one rejects it.
+        data = bytes(build_cfb(list(self.PPT_STREAMS)))
+        assert data[512:520] == b"\xfd\xff\xff\xff\x02\x00\x00\x00"
+        assert sigtype.types.document.Xls().match_signature(data)
+        assert not sigtype.types.document.Ppt().match_signature(data)
+        assert self._ext(data) == "ppt"
+
+    def test_unknown_ole_container_is_not_office(self):
+        data = build_cfb(["VisioDocument"])
+        assert self._ext(data) is None
+
+    def test_embedded_object_does_not_change_the_type(self):
+        data = bytes(build_cfb(["WordDocument", ("ObjectPool", ["Workbook"])]))
+        assert self._ext(data) == "doc"
+        assert not sigtype.types.document.Xls().match(data)
+
+    def test_4096_byte_sectors(self):
+        assert self._ext(build_cfb(["WordDocument"], sector_shift=12)) == "doc"
+
+    def test_directory_past_signature_window(self, tmp_path):
+        data = bytes(build_cfb(["Workbook"], padding_sectors=20))
+        assert len(data) > sigtype.SIGNATURE_SIZE * 1.3
+
+        assert self._ext(data) == "xls"
+
+        path = tmp_path / "late.xls"
+        path.write_bytes(data)
+        assert sigtype.guess_extension(str(path)) == "xls"
+        assert sigtype.guess_extension(io.BytesIO(data)) == "xls"
+
+        head = data[: sigtype.SIGNATURE_SIZE]
+        assert sigtype.guess_extension(head, read_at=lambda offset, size: data[offset : offset + size]) == "xls"
+
+    def test_directory_past_signature_window_without_reader(self):
+        data = bytes(build_cfb(["Workbook"], padding_sectors=20))
+        assert read_root_entry_names(data[: sigtype.SIGNATURE_SIZE], None) is None
+        # nothing to go on for the directory, so the byte-offset heuristics decide and must not raise
+        assert sigtype.types.document.Doc().match(data[: sigtype.SIGNATURE_SIZE]) is False
+
+    def test_cyclic_directory_chain_terminates(self):
+        data = build_cfb(list(self.PPT_STREAMS))
+        data[512 + 4 * 2 : 512 + 4 * 3] = (2).to_bytes(4, "little")  # second directory sector points to itself
+        assert read_root_entry_names(bytes(data), None) is None
+
+    def test_truncated_container(self):
+        data = bytes(build_cfb(["WordDocument"]))
+        assert read_root_entry_names(data[:600], None) is None
+        assert read_root_entry_names(data[:100], None) is None
+
+    def test_real_fixtures(self):
+        for name, ext in (("sample.doc", "doc"), ("sample.xls", "xls"), ("sample.ppt", "ppt")):
+            assert sigtype.guess_extension(FIXTURES + "/" + name) == ext
+            data = Path(FIXTURES + "/" + name).read_bytes()
+            assert read_root_entry_names(data, None) is not None
+
+
+class TestTextBasedTypes:
+    SVG = b'<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10"/></svg>'
+
+    def test_svg(self):
+        kind = sigtype.guess(self.SVG)
+        assert kind is not None
+        assert (kind.mime, kind.extension) == ("image/svg+xml", "svg")
+        assert sigtype.is_image(self.SVG)
+
+    def test_svg_with_prolog(self):
+        buf = (
+            b'\xef\xbb\xbf\n<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n'
+            b"<!-- Created with an editor -->\n"
+            b'<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">\n'
+            b'<svg xmlns="http://www.w3.org/2000/svg"></svg>'
+        )
+        assert sigtype.guess_extension(buf) == "svg"
+
+    def test_svg_with_internal_subset(self):
+        buf = b'<?xml version="1.0"?><!DOCTYPE svg [ <!ENTITY ns "http://www.w3.org/2000/svg"> ]>\n<svg xmlns="&ns;"/>'
+        assert sigtype.guess_extension(buf) == "svg"
+
+    def test_other_xml_is_not_svg(self):
+        assert sigtype.guess_extension(b'<?xml version="1.0"?><html><svg></svg></html>') is None
+        assert sigtype.guess_extension(b"<svgfoo></svgfoo>") is None
+        assert sigtype.guess_extension(b"just <svg> mentioned in text") is None
+
+    def test_svg_path(self, tmp_path):
+        path = tmp_path / "logo.svg"
+        path.write_bytes(self.SVG)
+        assert sigtype.guess_mime(str(path)) == "image/svg+xml"
+
+    def test_fb2(self):
+        buf = (
+            b'<?xml version="1.0" encoding="utf-8"?>\n<FictionBook xmlns="http://www.gribuser.ru/xml/fictionbook/2.0">'
+        )
+        kind = sigtype.guess(buf)
+        assert kind is not None
+        assert (kind.mime, kind.extension) == ("application/x-fictionbook+xml", "fb2")
+
+    def test_eml(self):
+        buf = (
+            b"Received: from mail.example.com (mail.example.com [192.0.2.1])\r\n"
+            b"\tby mx.example.org with ESMTP id abc123\r\n"
+            b"From: Alice <alice@example.com>\r\n"
+            b"To: Bob <bob@example.org>\r\n"
+            b"Subject: Hello\r\n"
+            b"Date: Mon, 21 Sep 2026 10:00:00 +0000\r\n"
+            b"\r\n"
+            b"Body with \xff\xfe bytes\r\n"
+        )
+        kind = sigtype.guess(buf)
+        assert kind is not None
+        assert (kind.mime, kind.extension) == ("message/rfc822", "eml")
+
+    def test_eml_cut_mid_line_by_signature_window(self):
+        buf = b"From: a@example.com\nTo: b@example.org\nSubject: a long subje"
+        assert sigtype.guess_extension(buf) == "eml"
+
+    def test_headers_alone_are_not_enough_for_eml(self):
+        assert sigtype.guess_extension(b"Content-Type: text/plain\nContent-Length: 5\n\nhello") is None
+        assert sigtype.guess_extension(b"Subject: only one known header\nX-Custom: 1\n\nhello") is None
+
+    def test_prose_is_not_eml(self):
+        assert sigtype.guess_extension(b"From: the beginning\nthis is just prose\nTo: nobody\n") is None
+
+    def test_binary_is_not_eml(self):
+        assert sigtype.guess_extension(b"From:\x00\x01\x02To:\x00\x00Subject:\x00") is None
+
+
+class TestPlainText:
+    @staticmethod
+    def _guess(data: bytes):
+        return sigtype.match(data, [*sigtype.types.TYPES, *sigtype.types.PLAIN_TEXT])
+
+    def test_plain_text(self):
+        kind = self._guess(b"Just some notes.\nAnother line.\n")
+        assert kind is not None
+        assert (kind.mime, kind.extension) == ("text/plain", "txt")
+
+    def test_markdown(self):
+        for data in (
+            b"# Title\n\nSee [the docs](https://example.com/docs) for more.\n",
+            b"Intro\n\n```python\nprint('hi')\n```\n",
+            b"Some **important** words.\n",
+            b"![logo](./logo.png)\n",
+        ):
+            kind = self._guess(data)
+            assert kind is not None
+            assert (kind.mime, kind.extension) == ("text/markdown", "md"), data
+
+    def test_code_and_config_are_not_markdown(self):
+        for data in (
+            b"# comment\n- item\n- other\nkey: value\n",
+            b"#!/bin/sh\n# comment\necho done\n",
+            b"# Title-looking comment\nx = a**2 + b**3\n",
+            b"handlers[name](arg)\n",
+            b"__init__ and __all__\n",
+        ):
+            kind = self._guess(data)
+            assert kind is not None
+            assert kind.extension == "txt", data
+
+    def test_binary_is_not_text(self):
+        assert self._guess(b"\x00\x01\x02") is None
+        assert self._guess(b"") is None
+
+    def test_default_guess_does_not_return_text(self):
+        assert sigtype.guess(b"Just some notes.\nAnother line.\n") is None
+        assert sigtype.guess(b"# Title\n\n```\ncode\n```\n") is None
+
+    def test_binary_types_win_over_text(self):
+        kind = self._guess(b'<svg xmlns="http://www.w3.org/2000/svg"/>')
+        assert kind is not None
+        assert kind.extension == "svg"
+
+
+class TestOfd:
+    @staticmethod
+    def _zip(*names: str, compress: bool = False) -> bytes:
+        buf = io.BytesIO()
+        method = zipfile.ZIP_DEFLATED if compress else zipfile.ZIP_STORED
+        with zipfile.ZipFile(buf, "w", method) as zf:
+            for name in names:
+                zf.writestr(name, "<xml>" + name * 20 + "</xml>")
+        return buf.getvalue()
+
+    def test_ofd(self):
+        kind = sigtype.guess(self._zip("OFD.xml", "Doc_0/Document.xml", "Doc_0/Pages/Page_0/Content.xml"))
+        assert kind is not None
+        assert (kind.mime, kind.extension) == ("application/ofd", "ofd")
+
+    def test_ofd_root_entry_not_first(self):
+        data = self._zip("Doc_0/Document.xml", "Doc_0/Res/PublicRes.xml", "OFD.xml", compress=True)
+        assert sigtype.guess_extension(data) == "ofd"
+
+    def test_plain_zip_is_not_ofd(self):
+        assert sigtype.guess_extension(self._zip("a.txt", "b.txt")) == "zip"
+
+    def test_nested_ofd_xml_is_not_the_root_entry(self):
+        assert sigtype.guess_extension(self._zip("docs/OFD.xml", "docs/x.xml")) == "zip"
+        assert sigtype.guess_extension(self._zip("NOTOFD.xml", "x.xml")) == "zip"
+
+
+class TestEbooks:
+    def test_mobi(self):
+        data = b"Some Book Title".ljust(60, b"\x00") + b"BOOKMOBI" + b"\x00" * 100
+        kind = sigtype.guess(data)
+        assert kind is not None
+        assert (kind.mime, kind.extension) == ("application/x-mobipocket-ebook", "mobi")
+        assert sigtype.is_document(data)
+
+    def test_mobi_needs_the_marker_at_its_offset(self):
+        assert sigtype.guess_extension(b"BOOKMOBI" + b"\x00" * 100) is None
+        assert sigtype.guess_extension(b"x" * 61 + b"BOOKMOBI" + b"\x00" * 100) is None
+
+    def test_djvu(self):
+        for form in (b"DJVU", b"DJVM"):
+            data = b"AT&TFORM\x00\x00\x12\x34" + form + b"\x00" * 100
+            kind = sigtype.guess(data)
+            assert kind is not None
+            assert (kind.mime, kind.extension) == ("image/vnd.djvu", "djvu")
+
+    def test_iff_form_that_is_not_djvu(self):
+        assert sigtype.guess_extension(b"AT&TFORM\x00\x00\x12\x34DJVX" + b"\x00" * 100) is None
+
+
+class TestOpus:
+    @staticmethod
+    def _ogg_page(first_packet: bytes, segments: int = 1) -> bytes:
+        header = b"OggS\x00\x02" + b"\x00" * 20 + bytes([segments])
+        table = bytes([len(first_packet)]) + b"\x00" * (segments - 1)
+        return header + table + first_packet
+
+    def test_opus(self):
+        data = self._ogg_page(b"OpusHead\x01\x02\x38\x01\x80\xbb\x00\x00\x00\x00\x00")
+        kind = sigtype.guess(data)
+        assert kind is not None
+        assert (kind.mime, kind.extension) == ("audio/opus", "opus")
+        assert sigtype.is_audio(data)
+
+    def test_opus_with_several_segments(self):
+        assert sigtype.guess_extension(self._ogg_page(b"OpusHead\x01\x02", segments=3)) == "opus"
+
+    def test_vorbis_stays_ogg(self):
+        kind = sigtype.guess(self._ogg_page(b"\x01vorbis\x00\x00\x00\x00\x02"))
+        assert kind is not None
+        assert (kind.mime, kind.extension) == ("audio/ogg", "ogg")
+
+    def test_truncated_ogg_page(self):
+        assert sigtype.guess_extension(b"OggS\x00\x02" + b"\x00" * 20) == "ogg"
+        assert sigtype.guess_extension(b"OggS\x00\x02" + b"\x00" * 20 + b"\xff") == "ogg"
+
+
+class TestMatroska:
+    EBML = b"\x1a\x45\xdf\xa3"
+
+    def _doc(self, doctype: bytes) -> bytes:
+        return self.EBML + b"\x9f\x42\x86\x81\x01" + b"\x42\x82" + bytes([0x80 | len(doctype)]) + doctype + b"\x00" * 64
+
+    def test_mkv(self):
+        kind = sigtype.guess(self._doc(b"matroska"))
+        assert kind is not None
+        assert (kind.mime, kind.extension) == ("video/x-matroska", "mkv")
+
+    def test_webm(self):
+        kind = sigtype.guess(self._doc(b"webm"))
+        assert kind is not None
+        assert (kind.mime, kind.extension) == ("video/webm", "webm")
+
+    def test_doctype_without_ebml_header_is_ignored(self):
+        assert sigtype.guess_extension(b"\x00" * 16 + self._doc(b"matroska")) is None
+        assert sigtype.guess_extension(b"\x00" * 16 + self._doc(b"webm")) is None
+
+    def test_ebml_header_with_another_doctype(self):
+        assert sigtype.guess_extension(self._doc(b"other")) is None
+
+
+class TestOleDirectoryIsParsedOnce:
+    def _count_reads(self, data: bytes, matchers) -> int:
+        calls = []
+
+        def read_at(offset: int, size: int) -> bytes:
+            calls.append(offset)
+            return data[offset : offset + size]
+
+        sigtype.match(data[: sigtype.SIGNATURE_SIZE], matchers, read_at=read_at)
+        return len(calls)
+
+    def test_reads_do_not_grow_with_the_number_of_ole_matchers(self):
+        data = bytes(build_cfb(["Workbook"], padding_sectors=20))
+        doc, xls, ppt, msg = (
+            sigtype.types.document.Doc(),
+            *(t() for t in (sigtype.types.document.Xls, sigtype.types.document.Ppt, sigtype.types.document.Msg)),
+        )
+
+        single = self._count_reads(data, [xls])
+        assert single > 0
+        # Doc runs first and does not match, then Xls matches: still one directory read in total
+        assert self._count_reads(data, [doc, xls]) == single
+        assert self._count_reads(data, [doc, ppt, msg, xls]) == single
+
+    def test_memo_does_not_leak_between_calls(self):
+        word = bytes(build_cfb(["WordDocument"], padding_sectors=20))
+        sheet = bytes(build_cfb(["Workbook"], padding_sectors=20))
+        for _ in range(3):
+            assert sigtype.guess_extension(word) == "doc"
+            assert sigtype.guess_extension(sheet) == "xls"
+
+    def test_memo_does_not_leak_through_a_reused_callable(self):
+        word = bytes(build_cfb(["WordDocument"], padding_sectors=20))
+        sheet = bytes(build_cfb(["Workbook"], padding_sectors=20))
+
+        def reader_for(data: bytes):
+            return lambda offset, size: data[offset : offset + size]
+
+        # the same window in both calls, only the reader (i.e. the rest of the file) differs
+        assert sigtype.guess_extension(word[: sigtype.SIGNATURE_SIZE], read_at=reader_for(word)) == "doc"
+        assert sigtype.guess_extension(word[: sigtype.SIGNATURE_SIZE], read_at=reader_for(sheet)) == "xls"
+
+
+class TestZipEntryMatchers:
+    @staticmethod
+    def _zip(names: list[str]) -> bytes:
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as zf:
+            for name in names:
+                zf.writestr(name, "x")
+        return buf.getvalue()
+
+    def test_ooxml_kinds_are_told_apart(self):
+        assert sigtype.guess_extension(self._zip(["[Content_Types].xml", "word/document.xml"])) == "docx"
+        assert sigtype.guess_extension(self._zip(["[Content_Types].xml", "xl/workbook.xml"])) == "xlsx"
+        assert sigtype.guess_extension(self._zip(["[Content_Types].xml", "ppt/presentation.xml"])) == "pptx"
+
+    def test_identifying_entry_after_trash_entries(self):
+        names = [f"[trash]/{i:04}.dat" for i in range(4)] + ["word/document.xml"]
+        assert sigtype.guess_extension(self._zip(names)) == "docx"
+
+    def test_only_the_first_entries_are_inspected(self):
+        assert sigtype.guess_extension(self._zip([f"a{i}.txt" for i in range(8)] + ["word/document.xml"])) == "zip"
+        assert sigtype.guess_extension(self._zip([f"a{i}.txt" for i in range(7)] + ["word/document.xml"])) == "docx"
+        assert sigtype.guess_extension(self._zip([f"a{i}.txt" for i in range(7)] + ["OFD.xml"])) == "ofd"
+        assert sigtype.guess_extension(self._zip([f"a{i}.txt" for i in range(8)] + ["OFD.xml"])) == "zip"
+
+    def test_shared_scan_does_not_leak_between_inputs(self):
+        docx = self._zip(["[Content_Types].xml", "word/document.xml"])
+        xlsx = self._zip(["[Content_Types].xml", "xl/workbook.xml"])
+        ofd = self._zip(["OFD.xml", "Doc_0/Document.xml"])
+
+        def reader_for(data: bytes):
+            return lambda offset, size: data[offset : offset + size]
+
+        for _ in range(2):
+            for data, ext in ((docx, "docx"), (xlsx, "xlsx"), (ofd, "ofd")):
+                assert sigtype.guess_extension(data) == ext
+                assert sigtype.guess_extension(data, read_at=reader_for(data)) == ext
+
+    def test_direct_matcher_use(self):
+        docx = self._zip(["[Content_Types].xml", "word/document.xml"])
+        assert sigtype.types.document.Docx().match(docx)
+        assert not sigtype.types.document.Xlsx().match(docx)
+        assert not sigtype.types.document.Ofd().match(docx)
+        assert not sigtype.types.document.Docx().match(b"not a zip at all")
+
+
+class TestMatcherOrder:
+    def test_text_based_matchers_are_tried_last(self):
+        tail = [type(kind).__name__ for kind in sigtype.types.TYPES[-3:]]
+        assert tail == ["Svg", "Fb2", "Eml"]
+
+    def test_text_based_matchers_stay_in_their_families(self):
+        assert any(isinstance(kind, sigtype.types.text.Svg) for kind in sigtype.types.IMAGE)
+        assert any(isinstance(kind, sigtype.types.text.Fb2) for kind in sigtype.types.DOCUMENT)
+        assert any(isinstance(kind, sigtype.types.text.Eml) for kind in sigtype.types.DOCUMENT)
+
+    def test_every_matcher_is_listed_once(self):
+        families = [
+            *sigtype.types.IMAGE,
+            *sigtype.types.AUDIO,
+            *sigtype.types.VIDEO,
+            *sigtype.types.FONT,
+            *sigtype.types.DOCUMENT,
+            *sigtype.types.ARCHIVE,
+            *sigtype.types.APPLICATION,
+        ]
+        assert len(sigtype.types.TYPES) == len(families)
+        assert {id(kind) for kind in sigtype.types.TYPES} == {id(kind) for kind in families}
+
+
+class TestPdfHeaderPlacement:
+    BODY = b"%PDF-1.4\n" + b"\x00" * 32
+
+    def test_utf8_bom_before_header(self):
+        assert sigtype.guess_mime(b"\xef\xbb\xbf" + self.BODY) == "application/pdf"
+
+    def test_bom_alone_is_not_a_pdf(self):
+        assert sigtype.guess_mime(b"\xef\xbb\xbf" + b"\x00" * 32) is None
+
+    def test_bytearray_input(self):
+        assert sigtype.guess_mime(bytearray(self.BODY)) == "application/pdf"
+        assert sigtype.guess_mime(bytearray(b"junk" + self.BODY)) == "application/pdf"

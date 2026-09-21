@@ -2,10 +2,10 @@ from typing import Any
 
 from sigtype.match import match
 from sigtype.types import TYPES, Type
-from sigtype.utils import ReadableInput
+from sigtype.utils import ReadableInput, ReadAt
 
 
-def guess(obj: ReadableInput) -> Type | None:
+def guess(obj: ReadableInput, *, read_at: ReadAt | None = None) -> Type | None:
     """Infer the type of the given input.
 
     Function is overloaded to accept multiple types in input
@@ -13,6 +13,8 @@ def guess(obj: ReadableInput) -> Type | None:
 
     Args:
         obj: path to file, bytes or bytearray.
+        read_at: optional `read_at(offset, size)` callable for inputs that cannot be read back
+            automatically. See `sigtype.match`.
 
     Returns:
         The matched type instance. Otherwise None.
@@ -20,14 +22,16 @@ def guess(obj: ReadableInput) -> Type | None:
     Raises:
         TypeError: if obj is not a supported type.
     """
-    return match(obj) if obj else None
+    return match(obj, read_at=read_at) if obj else None
 
 
-def guess_mime(obj: ReadableInput) -> str | None:
+def guess_mime(obj: ReadableInput, *, read_at: ReadAt | None = None) -> str | None:
     """Infer the file type of the given input and return its MIME type.
 
     Args:
         obj: path to file, bytes or bytearray.
+        read_at: optional `read_at(offset, size)` callable for inputs that cannot be read back
+            automatically. See `sigtype.match`.
 
     Returns:
         The matched MIME type as string. Otherwise None.
@@ -35,15 +39,17 @@ def guess_mime(obj: ReadableInput) -> str | None:
     Raises:
         TypeError: if obj is not a supported type.
     """
-    kind = guess(obj)
+    kind = guess(obj, read_at=read_at)
     return kind.mime if kind is not None else None
 
 
-def guess_extension(obj: ReadableInput) -> str | None:
+def guess_extension(obj: ReadableInput, *, read_at: ReadAt | None = None) -> str | None:
     """Infer the file type of the given input and return its RFC file extension.
 
     Args:
         obj: path to file, bytes or bytearray.
+        read_at: optional `read_at(offset, size)` callable for inputs that cannot be read back
+            automatically. See `sigtype.match`.
 
     Returns:
         The matched file extension as string. Otherwise None.
@@ -51,7 +57,7 @@ def guess_extension(obj: ReadableInput) -> str | None:
     Raises:
         TypeError: if obj is not a supported type.
     """
-    kind = guess(obj)
+    kind = guess(obj, read_at=read_at)
     return kind.extension if kind is not None else None
 
 
@@ -60,13 +66,13 @@ def get_type(mime: str | None = None, ext: str | None = None) -> Type | None:
 
     Args:
         ext: file extension string. E.g: jpg, png, mp4, mp3
-        mime: MIME string. E.g: image/jpeg, video/mpeg
+        mime: MIME string, canonical or a known alias. E.g: image/jpeg, video/mpeg
 
     Returns:
         The matched file type instance. Otherwise None.
     """
     for kind in TYPES:
-        if kind.extension == ext or kind.mime == mime:
+        if kind.extension == ext or (mime is not None and kind.is_mime(mime)):
             return kind
     return None
 

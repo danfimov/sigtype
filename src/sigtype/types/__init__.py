@@ -1,7 +1,13 @@
 from typing import Final
 
-from sigtype.types import application, archive, audio, document, font, image, video
+from sigtype.types import application, archive, audio, document, font, image, text, video
 from sigtype.types.base import Type
+
+# Text based formats are recognized by parsing their content, which costs more than comparing a signature.
+# They are members of their families (so is_image() and is_document() know them) but are tried last by guess().
+_SVG: Final = text.Svg()
+_FB2: Final = text.Fb2()
+_EML: Final = text.Eml()
 
 # Supported image types
 IMAGE: Final = (
@@ -25,6 +31,7 @@ IMAGE: Final = (
     image.Avif(),
     image.Qoi(),
     image.Dds(),
+    _SVG,
 )
 
 # Supported video types
@@ -48,6 +55,7 @@ AUDIO: Final = (
     audio.Flac(),
     audio.Mp3(),
     audio.M4a(),
+    audio.Opus(),
     audio.Ogg(),
     audio.Wav(),
     audio.Amr(),
@@ -103,11 +111,24 @@ DOCUMENT: Final = (
     document.Xls(),
     document.Xlsx(),
     document.Ods(),
+    document.Msg(),
+    document.Ofd(),
+    document.Mobi(),
+    document.Djvu(),
+    _FB2,
+    _EML,
 )
 
+# Plain text matchers. Not part of TYPES, since any text file would match them and guess() would stop returning
+# None for unknown data. Pass them explicitly: `sigtype.match(obj, [*TYPES, *PLAIN_TEXT])`. Md must precede Txt.
+PLAIN_TEXT: Final = (text.Md(), text.Txt())
 
 # Expose supported type matchers
-TYPES: Final = list(IMAGE + AUDIO + VIDEO + FONT + DOCUMENT + ARCHIVE + APPLICATION)
+_TEXT_BASED: Final[tuple[Type, ...]] = (_SVG, _FB2, _EML)
+TYPES: Final[list[Type]] = [
+    *(kind for kind in (*IMAGE, *AUDIO, *VIDEO, *FONT, *DOCUMENT, *ARCHIVE, *APPLICATION) if kind not in _TEXT_BASED),
+    *_TEXT_BASED,
+]
 
 __all__ = [
     "APPLICATION",
@@ -116,6 +137,7 @@ __all__ = [
     "DOCUMENT",
     "FONT",
     "IMAGE",
+    "PLAIN_TEXT",
     "TYPES",
     "VIDEO",
     "Type",

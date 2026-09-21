@@ -13,16 +13,20 @@ _OTF_SIGNATURE: Final = bytes([0x4F, 0x54, 0x54, 0x4F, 0x00])
 _WOFF_MIN_LENGTH: Final = 7
 _SFNT_MIN_LENGTH: Final = 4
 
+# Deprecated by RFC 8081 in favour of font/woff, font/ttf and font/otf. Still accepted when looking a type up.
+_WOFF_ALIASES: Final = ("application/font-woff",)
+_SFNT_ALIASES: Final = ("application/font-sfnt",)
+
 
 class Woff(Type):
     """Implements the WOFF font type matcher."""
 
-    MIME: Final[str] = "application/font-woff"
+    MIME: Final[str] = "font/woff"
     EXTENSION: Final[str] = "woff"
 
     def __init__(self) -> None:
         """Initialize the Woff matcher."""
-        super().__init__(mime=Woff.MIME, extension=Woff.EXTENSION)
+        super().__init__(mime=Woff.MIME, extension=Woff.EXTENSION, aliases=_WOFF_ALIASES)
 
     @override
     def match(self, buf: bytes | bytearray) -> bool:
@@ -42,7 +46,7 @@ class Woff(Type):
 class Woff2(Type):
     """Implements the WOFF2 font type matcher."""
 
-    MIME: Final[str] = "application/font-woff"
+    MIME: Final[str] = "font/woff2"
     EXTENSION: Final[str] = "woff2"
 
     def __init__(self) -> None:
@@ -67,12 +71,12 @@ class Woff2(Type):
 class Ttf(Type):
     """Implements the TTF font type matcher."""
 
-    MIME: Final[str] = "application/font-sfnt"
+    MIME: Final[str] = "font/ttf"
     EXTENSION: Final[str] = "ttf"
 
     def __init__(self) -> None:
         """Initialize the Ttf matcher."""
-        super().__init__(mime=Ttf.MIME, extension=Ttf.EXTENSION)
+        super().__init__(mime=Ttf.MIME, extension=Ttf.EXTENSION, aliases=_SFNT_ALIASES)
 
     @override
     def match(self, buf: bytes | bytearray) -> bool:
@@ -83,12 +87,12 @@ class Ttf(Type):
 class Otf(Type):
     """Implements the OTF font type matcher."""
 
-    MIME: Final[str] = "application/font-sfnt"
+    MIME: Final[str] = "font/otf"
     EXTENSION: Final[str] = "otf"
 
     def __init__(self) -> None:
         """Initialize the Otf matcher."""
-        super().__init__(mime=Otf.MIME, extension=Otf.EXTENSION)
+        super().__init__(mime=Otf.MIME, extension=Otf.EXTENSION, aliases=_SFNT_ALIASES)
 
     @override
     def match(self, buf: bytes | bytearray) -> bool:

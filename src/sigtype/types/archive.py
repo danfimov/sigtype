@@ -150,6 +150,9 @@ class Pdf(Type):
 
     BOM: Final = bytes([0xEF, 0xBB, 0xBF])
     SIGNATURE: Final = bytes([0x25, 0x50, 0x44, 0x46])
+    HEADER: Final = b"%PDF-"
+    # Readers such as Acrobat accept the header anywhere within the first 1024 bytes
+    HEADER_SEARCH_RANGE: Final = 1024
 
     def __init__(self) -> None:
         """Initialize the PDF matcher."""
@@ -157,12 +160,14 @@ class Pdf(Type):
 
     @override
     def match(self, buf: bytes | bytearray) -> bool:
-        """Check whether the buffer starts with the PDF signature."""
-        # Detect BOM and skip first 3 bytes
-        if buf[:3] == Pdf.BOM:
-            buf = buf[3:]
+        """Check whether the buffer holds the PDF header, allowing junk before it."""
+        # The header at the very start, optionally behind a BOM
+        if buf.startswith(Pdf.SIGNATURE) or (buf.startswith(Pdf.BOM) and buf.startswith(Pdf.SIGNATURE, len(Pdf.BOM))):
+            return True
 
-        return buf[:4] == Pdf.SIGNATURE
+        # Some generators prepend garbage (e.g. HTML or a file name) before the header
+        idx = buf.find(Pdf.HEADER, 0, Pdf.HEADER_SEARCH_RANGE)
+        return idx != -1 and buf[idx + len(Pdf.HEADER) : idx + len(Pdf.HEADER) + 1].isdigit()
 
 
 class Exe(Type):

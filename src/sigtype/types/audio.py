@@ -1,7 +1,8 @@
-from typing import Final
+from typing import ClassVar, Final
 
 from sigtype._compat import override
 from sigtype.types.base import Type
+from sigtype.utils import ReadAt
 
 _MIDI_MIN_LENGTH: Final = 3
 _MIDI_SIGNATURE: Final = (0x4D, 0x54, 0x68, 0x64)
@@ -99,6 +100,35 @@ _OGG_MIN_LENGTH: Final = 3
 _OGG_SIGNATURE: Final = (0x4F, 0x67, 0x67, 0x53)
 
 
+_OGG_SEGMENT_COUNT_OFFSET: Final = 26
+_OGG_SEGMENT_TABLE_OFFSET: Final = 27
+_OPUS_HEAD: Final = b"OpusHead"
+
+
+class Opus(Type):
+    """Implements the Opus audio type matcher (Opus in an Ogg container)."""
+
+    MIME: Final[str] = "audio/opus"
+    EXTENSION: Final[str] = "opus"
+
+    def __init__(self) -> None:
+        """Initialize the Opus matcher."""
+        super().__init__(mime=Opus.MIME, extension=Opus.EXTENSION)
+
+    @override
+    def match(self, buf: bytes | bytearray) -> bool:
+        """Match an Ogg stream whose first packet is the Opus identification header.
+
+        Must be checked before `Ogg`, which matches every Ogg stream.
+        """
+        if len(buf) <= _OGG_SEGMENT_COUNT_OFFSET or tuple(buf[:4]) != _OGG_SIGNATURE:
+            return False
+
+        # The first packet starts right after the segment table of the first page.
+        packet = _OGG_SEGMENT_TABLE_OFFSET + buf[_OGG_SEGMENT_COUNT_OFFSET]
+        return buf[packet : packet + len(_OPUS_HEAD)] == _OPUS_HEAD
+
+
 class Ogg(Type):
     """Implements the OGG audio type matcher."""
 
@@ -122,6 +152,7 @@ class Ogg(Type):
 
 
 _FLAC_MIN_LENGTH: Final = 3
+_FLAC_SIGNATURE_LENGTH: Final = 4
 _FLAC_SIGNATURE: Final = (0x66, 0x4C, 0x61, 0x43)
 _ID3V2_SIGNATURE: Final = (0x49, 0x44, 0x33)
 _ID3V2_HEADER_SIZE: Final = 10
@@ -138,17 +169,25 @@ class Flac(Type):
         """Initialize the Flac matcher."""
         super().__init__(mime=Flac.MIME, extension=Flac.EXTENSION)
 
+    needs_read_at: ClassVar[bool] = True
+
     @override
     def match(self, buf: bytes | bytearray) -> bool:
-        """Match the FLAC file signature, skipping a leading ID3v2 tag if present."""
+        """Match the FLAC file signature, skipping a leading ID3v2 tag if it fits in the buffer."""
+        return self.match_at(buf, None)
+
+    @override
+    def match_at(self, buf: bytes | bytearray, read_at: ReadAt | None) -> bool:
+        """Match the FLAC file signature, skipping a leading ID3v2 tag of any size."""
         offset = self._id3v2_tag_size(buf)
-        return (
-            len(buf) > offset + _FLAC_MIN_LENGTH
-            and buf[offset] == _FLAC_SIGNATURE[0]
-            and buf[offset + 1] == _FLAC_SIGNATURE[1]
-            and buf[offset + 2] == _FLAC_SIGNATURE[2]
-            and buf[offset + 3] == _FLAC_SIGNATURE[3]
-        )
+        if offset + _FLAC_MIN_LENGTH < len(buf):
+            head = buf[offset : offset + _FLAC_SIGNATURE_LENGTH]
+        elif read_at is not None:
+            # The ID3v2 tag runs past the signature window, so the FLAC marker has to be read from the input
+            head = read_at(offset, _FLAC_SIGNATURE_LENGTH)
+        else:
+            return False
+        return tuple(head) == _FLAC_SIGNATURE
 
     @staticmethod
     def _id3v2_tag_size(buf: bytes | bytearray) -> int:
