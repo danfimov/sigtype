@@ -45,10 +45,10 @@ VIDEO: Final = (
 AUDIO: Final = (
     audio.Aac(),
     audio.Midi(),
+    audio.Flac(),
     audio.Mp3(),
     audio.M4a(),
     audio.Ogg(),
-    audio.Flac(),
     audio.Wav(),
     audio.Amr(),
     audio.Aiff(),
