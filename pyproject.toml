@@ -1,5 +1,5 @@
 [project]
-name = "file_type"
+name = "sigtype"
 description = "Package to infer binary file types checking the magic numbers signature"
 readme = "README.md"
 authors = [
@@ -55,14 +55,14 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.version]
-path = "src/file_type/__init__.py"
+path = "src/sigtype/__init__.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/file_type"]
+packages = ["src/sigtype"]
 
 [tool.hatch.build.targets.sdist]
 include = [
-  "src/file_type",
+  "src/sigtype",
   "README.md",
   "LICENSE",
 ]

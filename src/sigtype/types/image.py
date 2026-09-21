@@ -1,8 +1,8 @@
 from typing import Final
 
-from file_type._compat import override
-from file_type.types.base import Type
-from file_type.types.isobmff import IsoBmff
+from sigtype._compat import override
+from sigtype.types.base import Type
+from sigtype.types.isobmff import IsoBmff
 
 _JPEG_SIGNATURE: Final = bytes([0xFF, 0xD8, 0xFF])
 _JPX_MIN_LENGTH: Final = 50

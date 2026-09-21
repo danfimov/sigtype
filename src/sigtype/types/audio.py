@@ -1,7 +1,7 @@
 from typing import Final
 
-from file_type._compat import override
-from file_type.types.base import Type
+from sigtype._compat import override
+from sigtype.types.base import Type
 
 _MIDI_MIN_LENGTH: Final = 3
 _MIDI_SIGNATURE: Final = (0x4D, 0x54, 0x68, 0x64)

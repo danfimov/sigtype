@@ -4,18 +4,18 @@ import sys
 from itertools import chain
 from os.path import isfile
 
-import file_type
+import sigtype
 
 
 def main() -> None:
-    """Run the filetype CLI entry point."""
-    parser = argparse.ArgumentParser(prog="filetype", description="Determine type of FILEs.")
+    """Run the sigtype CLI entry point."""
+    parser = argparse.ArgumentParser(prog="sigtype", description="Determine type of FILEs.")
     parser.add_argument("file", nargs="+", help="files, wildcard is supported")
     parser.add_argument(
         "-v",
         "--version",
         action="version",
-        version=f"%(prog)s {file_type.version}",
+        version=f"%(prog)s {sigtype.version}",
         help="output version information and exit",
     )
 
@@ -24,7 +24,7 @@ def main() -> None:
     files = filter(isfile, items)
 
     for file in files:
-        kind = file_type.guess(file)
+        kind = sigtype.guess(file)
         if kind is None:
             sys.stdout.write(f"{file}: cannot determine file type\n")
         else:

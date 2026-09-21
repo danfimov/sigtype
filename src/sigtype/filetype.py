@@ -1,8 +1,8 @@
 from typing import Any
 
-from file_type.match import match
-from file_type.types import TYPES, Type
-from file_type.utils import ReadableInput
+from sigtype.match import match
+from sigtype.types import TYPES, Type
+from sigtype.utils import ReadableInput
 
 # Expose supported matchers types
 types = TYPES
@@ -84,7 +84,7 @@ def add_type(instance: Any) -> None:  # noqa: ANN401
         None
     """
     if not isinstance(instance, Type):
-        msg = "instance must inherit from filetype.types.Type"
+        msg = "instance must inherit from sigtype.types.Type"
         raise TypeError(msg)
 
     types.insert(0, instance)

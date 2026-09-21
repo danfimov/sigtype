@@ -1,7 +1,7 @@
 from typing import Final
 
-from file_type._compat import override
-from file_type.types.base import Type
+from sigtype._compat import override
+from sigtype.types.base import Type
 
 _ZIP_SEARCH_RANGE: Final = 6000
 _ZIP_SIGNATURE_LENGTH: Final = 4

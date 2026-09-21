@@ -1,7 +1,7 @@
 from typing import Final
 
-from file_type.types import application, archive, audio, document, font, image, video
-from file_type.types.base import Type
+from sigtype.types import application, archive, audio, document, font, image, video
+from sigtype.types.base import Type
 
 # Supported image types
 IMAGE: Final = (

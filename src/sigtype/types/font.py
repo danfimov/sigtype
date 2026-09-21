@@ -1,7 +1,7 @@
 from typing import Final
 
-from file_type._compat import override
-from file_type.types.base import Type
+from sigtype._compat import override
+from sigtype.types.base import Type
 
 _WOFF_TAG: Final = bytes([0x77, 0x4F, 0x46, 0x46])
 _WOFF2_TAG: Final = bytes([0x77, 0x4F, 0x46, 0x32])

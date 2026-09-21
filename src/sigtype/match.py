@@ -1,6 +1,6 @@
 from collections.abc import Sequence
 
-from file_type.types import (
+from sigtype.types import (
     APPLICATION,
     ARCHIVE,
     AUDIO,
@@ -10,8 +10,8 @@ from file_type.types import (
     TYPES,
     VIDEO,
 )
-from file_type.types.base import Type
-from file_type.utils import ReadableInput, get_bytes
+from sigtype.types.base import Type
+from sigtype.utils import ReadableInput, get_bytes
 
 
 def match(obj: ReadableInput, matchers: Sequence[Type] = TYPES) -> Type | None:

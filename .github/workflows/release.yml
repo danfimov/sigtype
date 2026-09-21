@@ -27,7 +27,7 @@ jobs:
       - name: Set version from tag
         run: |
           version="${GITHUB_REF_NAME#v}"
-          sed -i "s/^__version__ = .*/__version__ = \"${version}\"/" src/file_type/__init__.py
+          sed -i "s/^__version__ = .*/__version__ = \"${version}\"/" src/sigtype/__init__.py
           echo "Building django-capo-s3 ${version}"
 
       - name: Build sdist and wheel

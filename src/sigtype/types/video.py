@@ -1,8 +1,8 @@
 from typing import Final
 
-from file_type._compat import override
-from file_type.types.base import Type
-from file_type.types.isobmff import IsoBmff
+from sigtype._compat import override
+from sigtype.types.base import Type
+from sigtype.types.isobmff import IsoBmff
 
 _MP4_COMPATIBLE_BRANDS: Final = ("mp41", "mp42", "isom")
 

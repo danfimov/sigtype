@@ -1,7 +1,7 @@
 from typing import Final
 
-from file_type._compat import override
-from file_type.types.base import Type
+from sigtype._compat import override
+from sigtype.types.base import Type
 
 _WASM_SIGNATURE: Final = bytearray([0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00])
 

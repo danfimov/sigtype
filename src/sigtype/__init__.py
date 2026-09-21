@@ -1,4 +1,4 @@
-from file_type.filetype import (
+from sigtype.filetype import (
     add_type,
     get_type,
     guess,
@@ -6,7 +6,7 @@ from file_type.filetype import (
     guess_mime,
     types,
 )
-from file_type.helpers import (
+from sigtype.helpers import (
     is_archive,
     is_audio,
     is_document,
@@ -16,7 +16,7 @@ from file_type.helpers import (
     is_mime_supported,
     is_video,
 )
-from file_type.match import (
+from sigtype.match import (
     application_match,
     archive_match,
     audio_match,

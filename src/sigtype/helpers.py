@@ -1,4 +1,4 @@
-from file_type.match import (
+from sigtype.match import (
     archive_match,
     audio_match,
     document_match,
@@ -6,8 +6,8 @@ from file_type.match import (
     image_match,
     video_match,
 )
-from file_type.types import TYPES
-from file_type.utils import ReadableInput
+from sigtype.types import TYPES
+from sigtype.utils import ReadableInput
 
 
 def is_extension_supported(ext: str) -> bool:
