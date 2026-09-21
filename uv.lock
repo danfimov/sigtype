@@ -199,60 +199,6 @@ toml = [
 ]
 
 [[package]]
-name = "file-type"
-source = { editable = "." }
-dependencies = [
-    { name = "typing-extensions", marker = "python_full_version < '3.12'" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "mypy" },
-    { name = "prek" },
-    { name = "pytest" },
-    { name = "pytest-codspeed" },
-    { name = "pytest-cov" },
-    { name = "ruff" },
-    { name = "zizmor" },
-]
-lint = [
-    { name = "ruff" },
-    { name = "zizmor" },
-]
-test = [
-    { name = "pytest" },
-    { name = "pytest-codspeed" },
-    { name = "pytest-cov" },
-]
-types = [
-    { name = "mypy" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "typing-extensions", marker = "python_full_version < '3.12'", specifier = ">=4.16.0" }]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "mypy", specifier = ">=2.3.1" },
-    { name = "prek", specifier = ">=0.5.3" },
-    { name = "pytest", specifier = ">=9.1.1" },
-    { name = "pytest-codspeed", specifier = ">=5.0.3" },
-    { name = "pytest-cov", specifier = ">=7.1.0" },
-    { name = "ruff", specifier = ">=0.16.8" },
-    { name = "zizmor", specifier = ">=1.30.1" },
-]
-lint = [
-    { name = "ruff", specifier = ">=0.16.8" },
-    { name = "zizmor", specifier = ">=1.30.1" },
-]
-test = [
-    { name = "pytest", specifier = ">=9.1.1" },
-    { name = "pytest-codspeed", specifier = ">=5.0.3" },
-    { name = "pytest-cov", specifier = ">=7.1.0" },
-]
-types = [{ name = "mypy", specifier = ">=2.3.1" }]
-
-[[package]]
 name = "iniconfig"
 version = "2.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -620,6 +566,60 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/1e/5d/a509c07d714b6da88f2c518b4637cf6f1d46b074be8f0f1e5fb9ff5126fe/ruff-0.16.8-py3-none-win_amd64.whl", hash = "sha256:a6b85621fd3c81e31fc5f5add09c9c078b430db3595ca632efafdec9e64ebfaa", size = 10586899, upload-time = "2026-09-16T15:54:40.488Z" },
     { url = "https://files.pythonhosted.org/packages/fe/a0/50787329e4f20bf9dc9f6230015d46ec69c51a97ace5bc202dae4755365d/ruff-0.16.8-py3-none-win_arm64.whl", hash = "sha256:d075e820af612102ce217f07cc93e69f9490b10ec13ea85fa87bd03d996cef8a", size = 10386316, upload-time = "2026-09-16T15:54:43.332Z" },
 ]
+
+[[package]]
+name = "sigtype"
+source = { editable = "." }
+dependencies = [
+    { name = "typing-extensions", marker = "python_full_version < '3.12'" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "mypy" },
+    { name = "prek" },
+    { name = "pytest" },
+    { name = "pytest-codspeed" },
+    { name = "pytest-cov" },
+    { name = "ruff" },
+    { name = "zizmor" },
+]
+lint = [
+    { name = "ruff" },
+    { name = "zizmor" },
+]
+test = [
+    { name = "pytest" },
+    { name = "pytest-codspeed" },
+    { name = "pytest-cov" },
+]
+types = [
+    { name = "mypy" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "typing-extensions", marker = "python_full_version < '3.12'", specifier = ">=4.16.0" }]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "mypy", specifier = ">=2.3.1" },
+    { name = "prek", specifier = ">=0.5.3" },
+    { name = "pytest", specifier = ">=9.1.1" },
+    { name = "pytest-codspeed", specifier = ">=5.0.3" },
+    { name = "pytest-cov", specifier = ">=7.1.0" },
+    { name = "ruff", specifier = ">=0.16.8" },
+    { name = "zizmor", specifier = ">=1.30.1" },
+]
+lint = [
+    { name = "ruff", specifier = ">=0.16.8" },
+    { name = "zizmor", specifier = ">=1.30.1" },
+]
+test = [
+    { name = "pytest", specifier = ">=9.1.1" },
+    { name = "pytest-codspeed", specifier = ">=5.0.3" },
+    { name = "pytest-cov", specifier = ">=7.1.0" },
+]
+types = [{ name = "mypy", specifier = ">=2.3.1" }]
 
 [[package]]
 name = "tomli"

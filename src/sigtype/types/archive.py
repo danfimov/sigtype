@@ -1,8 +1,8 @@
 import struct
 from typing import Final
 
-from file_type._compat import override
-from file_type.types.base import Type
+from sigtype._compat import override
+from sigtype.types.base import Type
 
 
 class Epub(Type):

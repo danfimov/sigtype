@@ -1,7 +1,7 @@
 import codecs
 from typing import Final
 
-from file_type.types.base import Type
+from sigtype.types.base import Type
 
 _FTYP_HEADER_SIZE: Final = 16
 
